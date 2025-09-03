@@ -22,7 +22,7 @@ services:
       context: ./backend
     container_name: qoyu-backend
     env_file:
-      - /backend/.env
+      - ./backend/.env           
     depends_on:
       db:
         condition: service_healthy
@@ -34,13 +34,15 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: /api        # фронт будет стучаться на /api
+        VITE_API_URL: /api
     container_name: qoyu-web
-    ports:
-      - "80:80"
     depends_on:
       - backend
     restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro   # <-- чтобы /api проксировался на backend
 
 volumes:
   pg_data:

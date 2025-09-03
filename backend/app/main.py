@@ -16,20 +16,21 @@ app = FastAPI(
 )
 
 Base.metadata.create_all(bind=engine)
-origins = settings.cors_origins_list or ["http://localhost:5173"]
-allow_credentials = origins != ["*"]
+
+origins = settings.cors_origins_list  # <— из .env / config
+allow_credentials = bool(origins) and origins != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins or [],     # same-origin через Caddy CORS не требует
     allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ---- /media ----
+
 os.makedirs(settings.media_dir, exist_ok=True)
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
 
-# ---- routers ----
 app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(products.router)

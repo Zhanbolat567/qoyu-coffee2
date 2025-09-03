@@ -15,10 +15,9 @@ class Settings(BaseSettings):
     app_name: str = "QOYU Coffee API"
     debug: bool = True
 
-    # БД/медиа
-    database_url: str  # postgresql+psycopg://user:pass@host:port/dbname
-    public_media_url: AnyUrl
-    media_dir: str = "media"
+    database_url: str
+    public_media_url: AnyUrl = "https://qoyucoffee.kz/media"
+    media_dir: str = "/media"
 
     # CORS как СТРОКА (CSV). Потом сами превратим в list.
     cors_origins: str | None = None
@@ -34,41 +33,26 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=".env",
-        env_prefix="",          # имена в .env такие же, как поля
-        case_sensitive=False,   # можно писать SECRET_KEY или secret_key
-        extra="ignore",         # лишние ключи не ломают загрузку
+        env_prefix="",
+        case_sensitive=False,
+        extra="ignore",
     )
-
-    # ---- Совместимость со старым кодом (UPPER_CASE) ----
     @property
-    def DATABASE_URL(self) -> str:
-        return self.database_url
-
+    def DATABASE_URL(self) -> str: return self.database_url
     @property
-    def PUBLIC_MEDIA_URL(self) -> str:
-        return str(self.public_media_url)
-
+    def PUBLIC_MEDIA_URL(self) -> str: return str(self.public_media_url)
     @property
-    def MEDIA_DIR(self) -> str:
-        return self.media_dir
-
+    def MEDIA_DIR(self) -> str: return self.media_dir
     @property
-    def CORS_ORIGINS(self) -> str:
-        # вернём исходную CSV-строку (может быть полезно где-то ещё)
-        return self.cors_origins or ""
-
+    def CORS_ORIGINS(self) -> str: return self.cors_origins or ""
     @property
-    def SECRET_KEY(self) -> str:
-        return self.secret_key
-
+    def SECRET_KEY(self) -> str: return self.secret_key
     @property
-    def ACCESS_TOKEN_EXPIRE_MINUTES(self) -> int:
-        return self.access_token_expire_minutes
+    def ACCESS_TOKEN_EXPIRE_MINUTES(self) -> int: return self.access_token_expire_minutes
 
-    # Нормализованный список origins
+    # нормализованный список origins
     @property
     def cors_origins_list(self) -> List[str]:
         return _split_csv(self.cors_origins)
-
 
 settings = Settings()
