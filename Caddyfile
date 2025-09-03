@@ -10,7 +10,7 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     tls {
         issuer acme {
             ca https://acme-staging-v02.api.letsencrypt.org/directory
-            email admin@qoyucoffee.kz
+            email qoyucoffee@gmail.com
         }
     }
 
@@ -20,3 +20,4 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     @web not path /api/*
     reverse_proxy web:80
 }
+
