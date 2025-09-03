@@ -12,7 +12,7 @@ type Order = {
   items: Item[];
 };
 
-const SOUND_KEY = "orders_sound_enabled_v2";
+const SOUND_KEY = "orders_sound_enabled_v3";
 
 // ===== утилиты =====
 const mmssSince = (iso: string) => {
@@ -32,38 +32,30 @@ function getCtx(): AudioContext | null {
   return _ctx;
 }
 
-/** Обязательное включение аудио пользователем */
+/** Включение аудио пользователем (тихий «тик» разблокировки — без слышимого звука) */
 async function enableSoundEngine() {
   const ctx = getCtx();
   if (!ctx) return false;
   try {
     if (ctx.state === "suspended") await ctx.resume();
-
-    // маленький «тик» для разблокировки
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    g.gain.value = 0.0001;
+    g.gain.value = 0.00001; // неслышимый тик
     o.connect(g).connect(ctx.destination);
     o.start();
-    o.stop(ctx.currentTime + 0.02);
-
+    o.stop(ctx.currentTime + 0.01);
     localStorage.setItem(SOUND_KEY, "1");
     return true;
-  } catch (e) {
-    console.warn("enableSoundEngine failed:", e);
+  } catch {
     return false;
   }
 }
 
-/** Айфон-подобный «динь» (не оригинал) — арпеджио 3 нот */
-export async function playIOSLikeDing() {
+/** Айфоноподобный «динь» (не оригинал) — арпеджио 3 нот. Используется ТОЛЬКО при появлении нового заказа */
+async function playIOSLikeDing() {
+  if (localStorage.getItem(SOUND_KEY) !== "1") return;
   const ctx = getCtx();
   if (!ctx) return;
-
-  if (localStorage.getItem(SOUND_KEY) !== "1") {
-    // звук не включён пользователем
-    return;
-  }
 
   try {
     if (ctx.state === "suspended") await ctx.resume();
@@ -98,9 +90,7 @@ export async function playIOSLikeDing() {
 
     master.gain.setValueAtTime(0.6, base);
     master.gain.exponentialRampToValueAtTime(0.0001, base + 0.7);
-  } catch (e) {
-    console.warn("playIOSLikeDing failed:", e);
-  }
+  } catch {}
 }
 
 // ===== компонент =====
@@ -112,6 +102,7 @@ export default function OrdersActive() {
 
   const prevIdsRef = useRef<string[]>([]);
   const firstLoadRef = useRef(true);
+  const lastDingRef = useRef(0);
 
   async function fetchActive() {
     try {
@@ -120,12 +111,16 @@ export default function OrdersActive() {
       const ids = list.map((o) => String(o.id));
 
       if (!firstLoadRef.current) {
-        // есть ли новые ID?
+        // Есть ли новые ID (которых раньше не было)?
         const prev = new Set(prevIdsRef.current);
-        const hasNew = ids.some((id) => !prev.has(id));
-        if (hasNew) {
-          // звук только если включён
-          playIOSLikeDing();
+        const newIds = ids.filter((id) => !prev.has(id));
+        if (newIds.length > 0) {
+          // защита от частого звука при пачке заказов
+          const now = Date.now();
+          if (now - lastDingRef.current > 500) {
+            playIOSLikeDing(); // <-- звук ТОЛЬКО здесь
+            lastDingRef.current = now;
+          }
         }
       } else {
         firstLoadRef.current = false; // первую загрузку — без звука
@@ -144,20 +139,24 @@ export default function OrdersActive() {
     return () => clearInterval(id);
   }, []);
 
-  // Кнопка включения/выключения звука
+  // Кнопка включения/выключения звука (без тестовых звуков!)
   const toggleSound = async () => {
     if (!soundEnabled) {
       const ok = await enableSoundEngine();
-      if (ok) {
-        setSoundEnabled(true);
-        // тестовый «динь», чтобы понять что всё ок
-        playIOSLikeDing();
-      }
+      if (ok) setSoundEnabled(true);
     } else {
       localStorage.removeItem(SOUND_KEY);
       setSoundEnabled(false);
     }
   };
+
+  async function finish(id: number | string) {
+    try {
+      await api.patch(`/orders/${id}/close`);
+      setOrders((prev) => prev.filter((o) => String(o.id) !== String(id)));
+      prevIdsRef.current = prevIdsRef.current.filter((x) => String(x) !== String(id));
+    } catch {}
+  }
 
   return (
     <div className="mx-auto max-w-screen-2xl">
@@ -177,10 +176,9 @@ export default function OrdersActive() {
         </button>
       </div>
 
-      {/* Если звук выключен — заметное уведомление */}
       {!soundEnabled && (
         <div className="mb-4 text-sm p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800">
-          Нажмите «Включить звук», чтобы слышать сигнал при новых заказах (требование браузера).
+          Включите звук, чтобы слышать сигнал при Появлении нового заказа (браузер требует действия пользователя).
         </div>
       )}
 
@@ -230,13 +228,7 @@ export default function OrdersActive() {
             {/* finish */}
             <div className="px-4 pb-4">
               <button
-                onClick={() => {
-                  const id = o.id;
-                  api.patch(`/orders/${id}/close`).then(() => {
-                    setOrders((prev) => prev.filter((x) => String(x.id) !== String(id)));
-                    prevIdsRef.current = prevIdsRef.current.filter((x) => String(x) !== String(id));
-                  });
-                }}
+                onClick={() => finish(o.id)}
                 className="w-full rounded-md py-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white inline-flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={18} />
