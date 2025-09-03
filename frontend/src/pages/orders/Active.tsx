@@ -15,7 +15,7 @@ type Order = {
 };
 
 // ==== Константы/утилы ====
-const SOUND_KEY = "orders_sound_enabled";
+const SOUND_KEY = "orders_sound_enabled_btn";
 
 const mmssSince = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -102,54 +102,46 @@ export default function OrdersActive() {
     typeof window !== "undefined" ? localStorage.getItem(SOUND_KEY) === "1" : false
   );
 
-  // прошлое состояние для детектора «новых активных»
   const prevActiveIdsRef = useRef<string[]>([]);
   const firstLoadRef = useRef(true);
   const lastDingAtRef = useRef(0);
 
-  // --- Поллинг каждую секунду ---
+  // --- Поллинг каждые 1 сек ---
   async function fetchActive() {
     try {
-      // сервер должен вернуть только активные (или вернёт все — мы отфильтруем ниже)
       const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
       const listRaw = Array.isArray(data) ? data : [];
-
-      // На всякий случай фильтруем по статусу на клиенте
       const list = listRaw.filter((o) => (o.status ?? "active") === "active");
 
       const ids = list.map((o) => String(o.id));
       if (!firstLoadRef.current) {
-        // Новые ID, которых раньше не было
         const prev = new Set(prevActiveIdsRef.current);
         const newIds = ids.filter((id) => !prev.has(id));
-
         if (newIds.length > 0) {
           const now = Date.now();
-          // защита от «треля» если пришла пачка
           if (now - lastDingAtRef.current > 400) {
             playIOSLikeDing();
             lastDingAtRef.current = now;
           }
         }
       } else {
-        firstLoadRef.current = false; // первую загрузку — без звука
+        firstLoadRef.current = false;
       }
 
       prevActiveIdsRef.current = ids;
       setOrders(list);
-    } catch (e) {
-      // Можно вывести уведомление/лог при необходимости
-      // console.warn("fetchActive error:", e);
+    } catch {
+      // ignore
     }
   }
 
   useEffect(() => {
     fetchActive();
-    const id = setInterval(fetchActive, 1000); // <— ОБНОВЛЕНИЕ КАЖДУЮ СЕКУНДУ
+    const id = setInterval(fetchActive, 1000);
     return () => clearInterval(id);
   }, []);
 
-  // --- Управление звуком (нужно 1 раз нажать) ---
+  // --- Кнопка звука ---
   const toggleSound = async () => {
     if (!soundEnabled) {
       const ok = await enableSoundEngine();
@@ -170,11 +162,12 @@ export default function OrdersActive() {
 
   return (
     <div className="mx-auto max-w-screen-2xl">
-      {/* Заголовок + управление звуком */}
+      {/* ===== Верхняя панель: заголовок + КНОПКА ЗВУКА ===== */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Заказы</h1>
         <button
           onClick={toggleSound}
+          type="button"
           className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm border transition
             ${soundEnabled
               ? "bg-emerald-600 text-white border-emerald-600"
@@ -182,13 +175,16 @@ export default function OrdersActive() {
           title={soundEnabled ? "Выключить звук" : "Включить звук"}
         >
           {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-          {soundEnabled ? "Звук включён" : "Включить звук"}
+          <span className="whitespace-nowrap">
+            {soundEnabled ? "Звук включён" : "Включить звук"}
+          </span>
         </button>
       </div>
 
+      {/* Подсказка, если звук не включён */}
       {!soundEnabled && (
         <div className="mb-4 text-sm p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800">
-          Нажмите «Включить звук», чтобы слышать сигнал при появлении новых заказов (требование браузера).
+          Нажмите «Включить звук», чтобы слышать сигнал при появлении новых заказов.
         </div>
       )}
 
