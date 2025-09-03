@@ -1,0 +1,23 @@
+{
+	# твой email для уведомлений от ACME
+	email admin@qoyucoffee.kz
+
+	# Временно: тестовый ACME от Let's Encrypt (не боевой)
+	acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+	# Явно используем только Let's Encrypt ACME (НЕ ZeroSSL)
+	acme_issuers {
+		acme
+	}
+}
+
+# если сервисы в compose называются web и backend:
+qoyucoffee.kz, www.qoyucoffee.kz {
+	encode gzip zstd
+
+	@api path /api/*
+	reverse_proxy qoyu-backend:8000
+
+	@web not path /api/*
+	reverse_proxy qoyu-web:80
+}
