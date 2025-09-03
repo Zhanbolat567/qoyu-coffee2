@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: qou-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qou_coffee
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qou_coffee"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+    container_name: qoyu-backend
+    env_file:
+      - /backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - media:/media
+    restart: always
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api        # фронт будет стучаться на /api
+    container_name: qoyu-web
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  pg_data:
+  media:

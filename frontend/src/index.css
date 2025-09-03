@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Шорткаты UI */
+.card { @apply bg-white rounded-2xl shadow p-4; }
+.btn { @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium transition; }
+.btn-primary { @apply btn bg-blue-600 text-white hover:bg-blue-700; }
+.btn-success { @apply btn bg-emerald-600 text-white hover:bg-emerald-700; }
+.btn-danger  { @apply btn bg-rose-600 text-white hover:bg-rose-700; }
+.btn-ghost   { @apply btn bg-slate-200/60 hover:bg-slate-300; }
+.btn-block   { @apply w-full justify-center; }
+
+.input   { @apply w-full rounded-xl border px-3 py-2 bg-white; }
+.textarea{ @apply w-full rounded-xl border px-3 py-2 min-h-[96px]; }
+.label   { @apply text-sm font-medium text-slate-700; }
+.badge-blue { @apply inline-flex items-center justify-center px-2 py-0.5 text-sm rounded-xl bg-blue-600 text-white; }
+
+.nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700/60; }
+.nav-item.active { @apply bg-slate-700 text-white; }
+
+.tab { @apply rounded-full border px-3 py-1 text-sm bg-white hover:bg-slate-100; }
+.tab-active { @apply border-blue-600 text-blue-700 bg-blue-50; }
+
+.switch { @apply relative inline-flex h-9 w-16 items-center rounded-full bg-slate-300; }
+.switch[data-on="true"] { @apply bg-blue-600; }
+.switch-dot { @apply absolute left-1 h-7 w-7 rounded-full bg-white transition-all; }
+.switch[data-on="true"] .switch-dot { @apply translate-x-7; }

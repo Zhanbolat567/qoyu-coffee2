@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* ВСЕ ВАШИ ПОЛЬЗОВАТЕЛЬСКИЕ КЛАССЫ ПЕРЕМЕЩЕНЫ СЮДА 
+  */
+  .card { @apply bg-white rounded-2xl shadow p-4; }
+  .btn { @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium transition; }
+  .btn-primary { @apply btn bg-blue-600 text-white hover:bg-blue-700; }
+  .btn-success { @apply btn bg-emerald-600 text-white hover:bg-emerald-700; }
+  .btn-danger { @apply btn bg-rose-600 text-white hover:bg-rose-700; }
+  .btn-ghost { @apply btn bg-slate-200/60 hover:bg-slate-300; }
+  .badge-blue { @apply inline-flex items-center justify-center px-2 py-0.5 text-sm rounded-xl bg-blue-600 text-white; }
+  .input { @apply w-full rounded-xl border px-3 py-2 bg-white; }
+  .textarea { @apply w-full rounded-xl border px-3 py-2 min-h-[96px]; }
+  .label { @apply text-sm font-medium text-slate-700; }
+  .nav-item { @apply flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700/60; }
+  .nav-item.active { @apply bg-slate-700 text-white; }
+  .tab { @apply rounded-full border px-3 py-1 text-sm bg-white hover:bg-slate-100; }
+  .tab-active { @apply border-blue-600 text-blue-700 bg-blue-50; }
+  .switch { @apply relative inline-flex h-9 w-16 items-center rounded-full bg-slate-300; }
+  .switch[data-on="true"] { @apply bg-blue-600; }
+  .switch-dot { @apply absolute left-1 h-7 w-7 rounded-full bg-white transition-all; }
+  .switch[data-on="true"] .switch-dot { @apply translate-x-7; }
+}
+
+@layer base {
+  /* плавное уменьшение базового размера шрифта */
+  html { font-size: 16px; }
+  @media (max-width: 1024px) { html { font-size: 15px; } }
+  @media (max-width: 640px)  { html { font-size: 14px; } }
+  @media (max-width: 400px)  { html { font-size: 13px; } }
+  @media (max-width: 340px)  { html { font-size: 12px; } }
+}
+
+@layer utilities {
+  /* универсальный "компактный" режим для телефонов */
+  @media (max-width: 640px) {
+    .mobile-compact .card   { padding: 0.75rem !important; }
+    .mobile-compact .btn    { padding: 0.5rem 0.75rem !important; font-size: .875rem !important; }
+    .mobile-compact .field  { height: 2.5rem !important; }
+    .mobile-compact .text-sm-mobile { font-size: .875rem !important; }
+    .mobile-compact .text-xs-mobile { font-size: .75rem  !important; }
+  }
+}
+
+.kbv-badge{
+  background:#0b5ea8; color:#fff; border-radius:10px;
+  width:56px; height:92px; display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:32px; line-height:1;
+}
+.kbv-badge > span{ display:inline-block; transform: rotate(90deg); }
+.kbv-badge{
+  background:#0b5ea8;
+  color:#fff;
+  border-radius:10px;
+  width:56px;              /* подгони под свой размер */
+  height:92px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+  font-size:32px;
+  line-height:1;
+  /* НЕ НУЖНО: writing-mode / text-orientation */
+}
+.sidebar-text-container {
+            transform: rotate(90deg); /* Поворот текста по часовой стрелке */
+        }
