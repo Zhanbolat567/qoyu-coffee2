@@ -9,7 +9,7 @@ ENV VITE_API_URL=$VITE_API_URL
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN npm run dev
 
 # ---------- Serve stage (Nginx) ----------
 FROM nginx:1.27-alpine
