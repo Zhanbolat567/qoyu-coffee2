@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
@@ -22,7 +20,7 @@ services:
       context: ./backend
     container_name: qoyu-backend
     env_file:
-      - ./backend/.env           
+      - ./backend/.env          # ВАЖНО: относительный путь, не /backend/.env
     depends_on:
       db:
         condition: service_healthy
@@ -30,31 +28,36 @@ services:
       - media:/media
     restart: always
 
-web:
-  build:
-    context: ./frontend
-    args: { VITE_API_URL: /api }
-  container_name: qoyu-web
-  depends_on: [backend]
-  restart: always
-  # ports:    # <-- убрать, порты будет открывать Caddy
-  #   - "80:80"
-  volumes:
-    - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  
-  
-caddy:
-  image: caddy:2.7-alpine
-  container_name: qou-caddy
-  ports:
-    - "80:80"
-    - "443:443"
-  volumes:
-    - ./Caddyfile:/etc/caddy/Caddyfile:ro
-    - caddy_data:/data
-    - caddy_config:/config
-  depends_on: [web, backend]
-  restart: always
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api      # фронт ходит на /api — без CORS
+    container_name: qoyu-web
+    depends_on:
+      - backend
+    restart: always
+    # Порты не открываем — наружу слушает Caddy
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: qou-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - backend
+    restart: always
+
 volumes:
   pg_data:
   media:
+  caddy_data:
+  caddy_config:
