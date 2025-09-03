@@ -17,9 +17,10 @@ qoyucoffee.kz, www.qoyucoffee.kz {
 	encode gzip zstd
 
 	@api path /api/*
-	reverse_proxy backend:8000
+	reverse_proxy qoyu-backend:8000
 
 	@web not path /api/*
 	reverse_proxy qoyu-web:80
 }
+
 
