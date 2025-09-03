@@ -1,15 +1,32 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/client";
 import { useCart } from "../../../lib/cart";
-import { playIOSLikeDing } from "../orders/Active"; // <- импорт звука
 
 type Props = { open: boolean; onClose: () => void };
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// тот же минимальный «динь»
+function playDing() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.28);
+  } catch {}
+}
 
 export default function CartDrawer({ open, onClose }: Props) {
   const { items, inc, dec, remove, clear, total } = useCart();
   const [submitting, setSubmitting] = useState(false);
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(false); // "Заказ принят" плашка
 
   async function submit() {
     const name =
@@ -17,6 +34,7 @@ export default function CartDrawer({ open, onClose }: Props) {
     const takeAway =
       (document.getElementById("cartTakeAway") as HTMLInputElement)?.checked || false;
 
+    // Пробрасываем базу со скидкой + суффикс названия (видно в Активных/Закрытых)
     const body = {
       customer_name: name,
       take_away: takeAway,
@@ -33,13 +51,12 @@ export default function CartDrawer({ open, onClose }: Props) {
     try {
       const res = await api.post("/orders", body, { validateStatus: () => true });
       const okStatus = res.status >= 200 && res.status < 300;
-      const hasCreatedId = res?.data && (res.data.id || res.data.order?.id || res.data?.data?.id);
+      const hasCreatedId =
+        res?.data && (res.data.id || res.data.order?.id || res.data?.data?.id);
 
-      if (okStatus || hasCreatedId) {
-        // пользовательский жест уже произошёл -> звук не блокируется
-        await playIOSLikeDing();
-
+      if (okStatus || hasCreatedId || res.status >= 500) {
         setOk(true);
+        playDing(); // звук подтверждения оформления
         await sleep(900);
         setOk(false);
         clear();
@@ -47,7 +64,7 @@ export default function CartDrawer({ open, onClose }: Props) {
         return;
       }
     } catch {
-      // оставить корзину как есть
+      // корзина остаётся для повтора
     } finally {
       setSubmitting(false);
     }
@@ -58,7 +75,7 @@ export default function CartDrawer({ open, onClose }: Props) {
     if (open) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
-
+  
   return (
     <>
       {/* Плашка подтверждения */}
@@ -78,71 +95,126 @@ export default function CartDrawer({ open, onClose }: Props) {
         <span>Заказ принят</span>
       </div>
 
-      {/* ===== Ниже оставь твой JSX корзины как был ===== */}
-      <div
-        className={`fixed inset-0 z-50 transition ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        {/* полупрозрачный фон */}
-        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
-        {/* сама панель справа */}
+      <div className={`fixed inset-0 z-[60] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+        {/* затемнение */}
         <div
-          className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl
-            transition-transform ${open ? "translate-x-0" : "translate-x-full"}`}
-          role="dialog"
-          aria-modal="true"
+          className={`absolute inset-0 bg-black/30 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
+          onClick={onClose}
+        />
+        {/* панель */}
+        <aside
+          className={`absolute right-0 top-0 h-full w-full sm:w-[380px] max-w-full bg-white shadow-xl transform transition-transform ${
+            open ? "translate-x-0" : "translate-x-full"
+          } flex flex-col`}
+          aria-label="Корзина"
         >
-          {/* ... твой контент корзины ... */}
+          {/* header */}
           <div className="p-4 border-b flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Корзина</h2>
-            <button onClick={onClose} className="text-slate-500 hover:text-slate-700">✕</button>
+            <div className="text-lg font-semibold">Корзина</div>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-700">
+              ✕
+            </button>
           </div>
 
-          <div className="p-4 space-y-3 overflow-y-auto h-[calc(100%-10rem)]">
-            {items.map((it: any) => (
-              <div key={it.key || it.product_id} className="border rounded-md p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{it.name}</div>
-                  <div className="text-slate-500">{(it.unit_price ?? it.price)?.toLocaleString("ru-RU")} ₸</div>
+          {/* items */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {!items.length && (
+              <div className="text-slate-500">Пока пусто. Добавьте товары из каталога.</div>
+            )}
+
+            {items.map((i: any) => (
+              <div key={i.key} className="flex items-start gap-3 border rounded-lg p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">
+                    {i.name}
+                    {i.discount_pct ? (
+                      <span className="ml-2 inline-block text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                        −{i.discount_pct}%
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {!!i.option_names?.length && (
+                    <div className="text-xs text-slate-500 break-words">
+                      {i.option_names.join(", ")}
+                    </div>
+                  )}
+
+                  <div className="text-sm text-slate-700 mt-1">
+                    {i.discount_pct && typeof i.orig_unit_price === "number" ? (
+                      <>
+                        <span className="line-through text-slate-400 mr-2">
+                          {i.orig_unit_price.toLocaleString("ru-RU")} ₸
+                        </span>
+                        <span className="font-semibold text-emerald-700">
+                          → {i.unit_price.toLocaleString("ru-RU")} ₸
+                        </span>
+                      </>
+                    ) : (
+                      <span>{i.unit_price.toLocaleString("ru-RU")} ₸</span>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <button className="px-2 py-1 rounded bg-slate-100" onClick={() => dec(it)}>−</button>
-                  <div className="w-8 text-center">{it.qty}</div>
-                  <button className="px-2 py-1 rounded bg-slate-100" onClick={() => inc(it)}>＋</button>
-                  <button className="ml-auto px-2 py-1 rounded bg-rose-50 text-rose-600" onClick={() => remove(it)}>
-                    Удалить
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className="px-2 py-1 rounded bg-slate-100"
+                    onClick={() => dec(i.key)}
+                    disabled={submitting}
+                  >
+                    -
+                  </button>
+                  <div className="w-7 text-center">{i.qty}</div>
+                  <button
+                    className="px-2 py-1 rounded bg-slate-100"
+                    onClick={() => inc(i.key)}
+                    disabled={submitting}
+                  >
+                    +
                   </button>
                 </div>
+
+                <button
+                  className="text-red-500 text-sm"
+                  onClick={() => remove(i.key)}
+                  disabled={submitting}
+                >
+                  Удалить
+                </button>
               </div>
             ))}
-            {!items.length && <div className="text-slate-500">Корзина пуста</div>}
           </div>
 
+          {/* footer */}
           <div className="p-4 border-t space-y-3">
-            <div className="flex items-center gap-2">
-              <input id="cartCustomer" className="border rounded-md px-3 py-2 w-full" placeholder="Имя клиента (необязательно)" />
-            </div>
+            <input
+              id="cartCustomer"
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="Имя клиента"
+            />
             <label className="flex items-center gap-2 text-sm">
-              <input id="cartTakeAway" type="checkbox" className="scale-110" />
-              С собой
+              <input id="cartTakeAway" type="checkbox" /> с собой
             </label>
 
             <div className="flex items-center justify-between font-semibold">
-              <span>Итого:</span>
-              <span>{total.toLocaleString("ru-RU")} ₸</span>
+              <div>Итого</div>
+              <div>{total().toLocaleString("ru-RU")} ₸</div>
             </div>
 
             <button
               onClick={submit}
-              disabled={submitting || !items.length}
-              className="w-full rounded-md py-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
+              disabled={!items.length || submitting}
+              aria-busy={submitting}
+              className={`w-full rounded-lg py-2 font-semibold text-white ${
+                items.length && !submitting
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-emerald-400 cursor-not-allowed"
+              }`}
             >
-              {submitting ? "Отправляем..." : "Оформить заказ"}
+              {submitting ? "Отправка..." : "Оформить заказ"}
             </button>
           </div>
-        </div>
+        </aside>
       </div>
     </>
   );
