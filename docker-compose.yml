@@ -39,7 +39,7 @@ services:
     restart: always
     # Порты не открываем — наружу слушает Caddy
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/qoyu.conf:/etc/nginx/conf.d/default.conf:ro
 
   caddy:
     image: caddy:2.7-alpine
