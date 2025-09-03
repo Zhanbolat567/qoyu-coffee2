@@ -56,7 +56,7 @@ export default function Register() {
             <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               className="w-full border rounded-lg px-10 py-2 outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Например, John Doe"
+              placeholder="Например, Алишер"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
