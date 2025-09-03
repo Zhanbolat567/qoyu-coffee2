@@ -1,3 +1,6 @@
+{
+    email admin@qoyucoffee.kz
+}
 qoyucoffee.kz, www.qoyucoffee.kz {
     encode gzip zstd
 
@@ -7,3 +10,4 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     @web not path /api/*
     reverse_proxy qoyu-web:80
 }
+
