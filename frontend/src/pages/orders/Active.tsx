@@ -15,7 +15,7 @@ type Order = {
 };
 
 // ==== Константы/утилы ====
-const SOUND_KEY = "orders_sound_enabled_btn";
+const SOUND_KEY = "orders_sound_enabled_fab";
 
 const mmssSince = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -141,7 +141,7 @@ export default function OrdersActive() {
     return () => clearInterval(id);
   }, []);
 
-  // --- Кнопка звука ---
+  // --- Переключатель звука (FAB — плавающая кнопка) ---
   const toggleSound = async () => {
     if (!soundEnabled) {
       const ok = await enableSoundEngine();
@@ -161,32 +161,21 @@ export default function OrdersActive() {
   }
 
   return (
-    <div className="mx-auto max-w-screen-2xl">
-      {/* ===== Верхняя панель: заголовок + КНОПКА ЗВУКА ===== */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold">Заказы</h1>
-        <button
-          onClick={toggleSound}
-          type="button"
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm border transition
-            ${soundEnabled
-              ? "bg-emerald-600 text-white border-emerald-600"
-              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
-          title={soundEnabled ? "Выключить звук" : "Включить звук"}
-        >
-          {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-          <span className="whitespace-nowrap">
-            {soundEnabled ? "Звук включён" : "Включить звук"}
-          </span>
-        </button>
-      </div>
+    <div className="mx-auto max-w-screen-2xl relative">
+      {/* Заголовок */}
+      <h1 className="text-3xl font-bold mb-4">Заказы</h1>
 
-      {/* Подсказка, если звук не включён */}
-      {!soundEnabled && (
-        <div className="mb-4 text-sm p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800">
-          Нажмите «Включить звук», чтобы слышать сигнал при появлении новых заказов.
-        </div>
-      )}
+      {/* Плавающая КНОПКА звука (fixed — всегда видна) */}
+      <button
+        onClick={toggleSound}
+        type="button"
+        className={`fixed top-6 right-6 z-50 shadow-lg border rounded-full px-4 py-2 flex items-center gap-2
+          ${soundEnabled ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-700 border-slate-300"}`}
+        title={soundEnabled ? "Выключить звук" : "Включить звук"}
+      >
+        {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+        <span className="hidden sm:inline">{soundEnabled ? "Звук включён" : "Включить звук"}</span>
+      </button>
 
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {orders.map((o) => (
