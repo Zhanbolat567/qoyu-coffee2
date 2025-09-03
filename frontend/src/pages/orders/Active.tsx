@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { CheckCircle2, Bell, BellOff } from "lucide-react";
 
+// ==== Типы ====
 type Item = { name: string; qty?: number; quantity?: number };
 type Order = {
   id: number | string;
+  status?: string; // "active" | "closed" | ...
   customer_name: string;
   take_away?: boolean;
   total: number;
@@ -12,9 +14,9 @@ type Order = {
   items: Item[];
 };
 
-const SOUND_KEY = "orders_sound_enabled_v3";
+// ==== Константы/утилы ====
+const SOUND_KEY = "orders_sound_enabled";
 
-// ===== утилиты =====
 const mmssSince = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -22,9 +24,9 @@ const mmssSince = (iso: string) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// Глобальный AudioContext
+// ==== Аудио ====
 let _ctx: AudioContext | null = null;
-function getCtx(): AudioContext | null {
+function getAudioCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (_ctx) return _ctx;
   const AC = (window.AudioContext || (window as any).webkitAudioContext);
@@ -32,15 +34,16 @@ function getCtx(): AudioContext | null {
   return _ctx;
 }
 
-/** Включение аудио пользователем (тихий «тик» разблокировки — без слышимого звука) */
+/** Разблокировать звук (нужен 1 раз по клику) */
 async function enableSoundEngine() {
-  const ctx = getCtx();
+  const ctx = getAudioCtx();
   if (!ctx) return false;
   try {
     if (ctx.state === "suspended") await ctx.resume();
+    // Неслышимый короткий тик — для разблокировки
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    g.gain.value = 0.00001; // неслышимый тик
+    g.gain.value = 0.00001;
     o.connect(g).connect(ctx.destination);
     o.start();
     o.stop(ctx.currentTime + 0.01);
@@ -51,12 +54,11 @@ async function enableSoundEngine() {
   }
 }
 
-/** Айфоноподобный «динь» (не оригинал) — арпеджио 3 нот. Используется ТОЛЬКО при появлении нового заказа */
+/** Айфоноподобный “динь” (не оригинал) — короткое арпеджио */
 async function playIOSLikeDing() {
   if (localStorage.getItem(SOUND_KEY) !== "1") return;
-  const ctx = getCtx();
+  const ctx = getAudioCtx();
   if (!ctx) return;
-
   try {
     if (ctx.state === "suspended") await ctx.resume();
 
@@ -93,53 +95,61 @@ async function playIOSLikeDing() {
   } catch {}
 }
 
-// ===== компонент =====
+// ==== Компонент ====
 export default function OrdersActive() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(
     typeof window !== "undefined" ? localStorage.getItem(SOUND_KEY) === "1" : false
   );
 
-  const prevIdsRef = useRef<string[]>([]);
+  // прошлое состояние для детектора «новых активных»
+  const prevActiveIdsRef = useRef<string[]>([]);
   const firstLoadRef = useRef(true);
-  const lastDingRef = useRef(0);
+  const lastDingAtRef = useRef(0);
 
+  // --- Поллинг каждую секунду ---
   async function fetchActive() {
     try {
+      // сервер должен вернуть только активные (или вернёт все — мы отфильтруем ниже)
       const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
-      const list = Array.isArray(data) ? data : [];
-      const ids = list.map((o) => String(o.id));
+      const listRaw = Array.isArray(data) ? data : [];
 
+      // На всякий случай фильтруем по статусу на клиенте
+      const list = listRaw.filter((o) => (o.status ?? "active") === "active");
+
+      const ids = list.map((o) => String(o.id));
       if (!firstLoadRef.current) {
-        // Есть ли новые ID (которых раньше не было)?
-        const prev = new Set(prevIdsRef.current);
+        // Новые ID, которых раньше не было
+        const prev = new Set(prevActiveIdsRef.current);
         const newIds = ids.filter((id) => !prev.has(id));
+
         if (newIds.length > 0) {
-          // защита от частого звука при пачке заказов
           const now = Date.now();
-          if (now - lastDingRef.current > 500) {
-            playIOSLikeDing(); // <-- звук ТОЛЬКО здесь
-            lastDingRef.current = now;
+          // защита от «треля» если пришла пачка
+          if (now - lastDingAtRef.current > 400) {
+            playIOSLikeDing();
+            lastDingAtRef.current = now;
           }
         }
       } else {
         firstLoadRef.current = false; // первую загрузку — без звука
       }
 
-      prevIdsRef.current = ids;
+      prevActiveIdsRef.current = ids;
       setOrders(list);
     } catch (e) {
-      console.warn("fetchActive error:", e);
+      // Можно вывести уведомление/лог при необходимости
+      // console.warn("fetchActive error:", e);
     }
   }
 
   useEffect(() => {
     fetchActive();
-    const id = setInterval(fetchActive, 1000);
+    const id = setInterval(fetchActive, 1000); // <— ОБНОВЛЕНИЕ КАЖДУЮ СЕКУНДУ
     return () => clearInterval(id);
   }, []);
 
-  // Кнопка включения/выключения звука (без тестовых звуков!)
+  // --- Управление звуком (нужно 1 раз нажать) ---
   const toggleSound = async () => {
     if (!soundEnabled) {
       const ok = await enableSoundEngine();
@@ -154,13 +164,13 @@ export default function OrdersActive() {
     try {
       await api.patch(`/orders/${id}/close`);
       setOrders((prev) => prev.filter((o) => String(o.id) !== String(id)));
-      prevIdsRef.current = prevIdsRef.current.filter((x) => String(x) !== String(id));
+      prevActiveIdsRef.current = prevActiveIdsRef.current.filter((x) => String(x) !== String(id));
     } catch {}
   }
 
   return (
     <div className="mx-auto max-w-screen-2xl">
-      {/* Верхняя панель: заголовок + кнопка звука */}
+      {/* Заголовок + управление звуком */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Заказы</h1>
         <button
@@ -172,13 +182,13 @@ export default function OrdersActive() {
           title={soundEnabled ? "Выключить звук" : "Включить звук"}
         >
           {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-          {soundEnabled ? "Звук включён" : "Звук выключен"}
+          {soundEnabled ? "Звук включён" : "Включить звук"}
         </button>
       </div>
 
       {!soundEnabled && (
         <div className="mb-4 text-sm p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800">
-          Включите звук, чтобы слышать сигнал при Появлении нового заказа (браузер требует действия пользователя).
+          Нажмите «Включить звук», чтобы слышать сигнал при появлении новых заказов (требование браузера).
         </div>
       )}
 
