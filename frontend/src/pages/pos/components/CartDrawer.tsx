@@ -6,6 +6,22 @@ type Props = { open: boolean; onClose: () => void };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function playDing() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.28);
+  } catch {}
+}
+
 export default function CartDrawer({ open, onClose }: Props) {
   const { items, inc, dec, remove, clear, total } = useCart();
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +55,7 @@ export default function CartDrawer({ open, onClose }: Props) {
 
       if (okStatus || hasCreatedId || res.status >= 500) {
         setOk(true);
+        playDing(); // звук подтверждения оформления
         await sleep(900);
         setOk(false);
         clear();
@@ -76,7 +93,6 @@ export default function CartDrawer({ open, onClose }: Props) {
         </span>
         <span>Заказ принят</span>
       </div>
-
       <div className={`fixed inset-0 z-[60] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
         {/* затемнение */}
         <div
