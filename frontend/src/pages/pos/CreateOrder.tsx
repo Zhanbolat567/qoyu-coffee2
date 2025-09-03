@@ -380,16 +380,16 @@ function CreateOrderComponent() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm font-semibold mr-2">Скидка:</div>
             {[20, 30, 50].map((p) => (
-              <button
-                key={p}
-                onClick={() => setDiscountPct(p)}
-                className={`px-3 py-1.5 rounded-full text-sm border ${
-                  discountPct === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-gray-50"
-                }`}
-              >
-                −{p}%
-              </button>
-            ))}
+                <button
+                  key={p}
+                  onClick={() => setDiscountPct(p)}
+                  className={`px-3 py-1.5 rounded-full text-sm border ${
+                    discountPct === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  −{p}%
+                </button>
+              ))}
             <button onClick={clearDiscount} className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50">
               Сброс
             </button>
