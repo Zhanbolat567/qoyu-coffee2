@@ -379,7 +379,7 @@ function CreateOrderComponent() {
         <div className="mb-4 rounded-xl bg-white shadow p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm font-semibold mr-2">Скидка:</div>
-            {[10, 20, 30].map((p) => (
+            {[20, 30, 50].map((p) => (
               <button
                 key={p}
                 onClick={() => setDiscountPct(p)}
