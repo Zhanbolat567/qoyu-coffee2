@@ -20,5 +20,6 @@ qoyucoffee.kz, www.qoyucoffee.kz {
 	reverse_proxy backend:8000
 
 	@web not path /api/*
-	reverse_proxy web:80
+	reverse_proxy qoyu-web:80
 }
+
