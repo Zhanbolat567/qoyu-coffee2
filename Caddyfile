@@ -1,6 +1,6 @@
 {
     # Email для Let's Encrypt
-    email admin@qoyucoffee.kz
+    email qoyucoffee@gmail.com
 
     # ВРЕМЕННО используем staging-CA, чтобы не упираться в лимиты
     acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
@@ -15,3 +15,4 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     @web not path /api/*
     reverse_proxy qoyu-web:80
 }
+
