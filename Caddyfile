@@ -1,13 +1,22 @@
 {
-    email admin@qoyucoffee.kz
+  email admin@qoyucoffee.kz
 }
+
 qoyucoffee.kz, www.qoyucoffee.kz {
-    encode gzip zstd
+  encode zstd gzip
 
-    @api path /api/*
+  # /api/* — режем префикс, чтобы /api/docs -> /docs на backend
+  handle_path /api/* {
     reverse_proxy qoyu-backend:8000
+  }
 
-    @web not path /api/*
+  # /media/* — проксируем как есть
+  handle /media/* {
+    reverse_proxy qoyu-backend:8000
+  }
+
+  # всё остальное — фронт
+  handle {
     reverse_proxy qoyu-web:80
+  }
 }
-
