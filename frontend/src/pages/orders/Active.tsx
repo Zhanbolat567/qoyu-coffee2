@@ -19,22 +19,55 @@ const mmssSince = (iso: string) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// лёгкий звук-«динь» без аудиофайлов (Web Audio)
-function playDing() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+// --- iPhone-like chime (не оригинал) --------------------
+let _dingCtx: AudioContext | null = null;
+function getCtx() {
+  if (typeof window === "undefined") return null as any;
+  if (_dingCtx) return _dingCtx;
+  const AC = (window.AudioContext || (window as any).webkitAudioContext);
+  _dingCtx = AC ? new AC() : null;
+  return _dingCtx;
+}
+export async function playIOSLikeDing() {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
+
+  // частоты (≈ C6–E6–G6)
+  const freqs = [1047, 1319, 1568];
+  const now = ctx.currentTime;
+  const master = ctx.createGain();
+  master.gain.value = 0.6;
+  master.connect(ctx.destination);
+
+  freqs.forEach((f, i) => {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(880, ctx.currentTime); // A5
-    g.gain.setValueAtTime(0.001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    o.connect(g).connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.28);
-  } catch {}
+    const detune = (i - 1) * 4; // лёгкий детюн
+    o.type = i === 0 ? "triangle" : "sine";
+    o.frequency.setValueAtTime(f, now);
+    o.detune.setValueAtTime(detune, now);
+
+    // быстрая атака + экспоненциальный спад
+    const t0 = now + i * 0.05;
+    const a = 0.01;
+    const d = 0.45;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.5, t0 + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+
+    o.connect(g).connect(master);
+    o.start(t0);
+    o.stop(t0 + d + 0.05);
+  });
+
+  // короткий «хвост» общим гейном
+  master.gain.setValueAtTime(0.6, now);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
 }
+// -------------------------------------------------------
 
 export default function OrdersActive() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -47,12 +80,11 @@ export default function OrdersActive() {
     const ids = list.map((o) => o.id);
 
     if (!firstLoadRef.current) {
-      // Есть ли новые ID, которых раньше не было?
       const prev = new Set(prevIdsRef.current);
       const hasNew = ids.some((id) => !prev.has(id));
-      if (hasNew) playDing();
+      if (hasNew) playIOSLikeDing();
     } else {
-      firstLoadRef.current = false; // первую загрузку без звука
+      firstLoadRef.current = false;
     }
 
     prevIdsRef.current = ids;
@@ -80,7 +112,6 @@ export default function OrdersActive() {
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {orders.map((o) => (
           <div key={o.id} className="bg-white rounded-lg shadow overflow-hidden">
-            {/* header */}
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 grid place-items-center rounded-md bg-slate-100 font-semibold">
@@ -101,7 +132,6 @@ export default function OrdersActive() {
               </div>
             </div>
 
-            {/* items */}
             <div className="px-4 py-2 space-y-1">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
@@ -114,13 +144,11 @@ export default function OrdersActive() {
               })}
             </div>
 
-            {/* total */}
             <div className="border-t px-4 py-3 flex items-center justify-between">
               <div className="font-semibold">Итого:</div>
               <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
             </div>
 
-            {/* finish */}
             <div className="px-4 pb-4">
               <button
                 onClick={() => finish(o.id)}
