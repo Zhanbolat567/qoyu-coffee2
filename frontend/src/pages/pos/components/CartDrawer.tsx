@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/client";
 import { useCart } from "../../../lib/cart";
-import { playIOSLikeDing } from "../../orders/Active"; // <- импорт звука
 
 type Props = { open: boolean; onClose: () => void };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
