@@ -1,26 +1,17 @@
 {
-	# твой email для ACME-аккаунта
-	email admin@qoyucoffee.kz
+    # Email для Let's Encrypt
+    email admin@qoyucoffee.kz
 
-	# ВРЕМЕННО: используем тестовый CA, пока действует лимит на проде
-	acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
-
-	# ЯВНО указываем только одного эмитента — ACME (Let's Encrypt).
-	# Это отключит ZeroSSL на Caddy 2.7.
-	acme_issuers {
-		acme
-	}
+    # ВРЕМЕННО используем staging-CA, чтобы не упираться в лимиты
+    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
-# ЗАМЕНИ имена сервисов, если у тебя они другие (например qou-*)
 qoyucoffee.kz, www.qoyucoffee.kz {
-	encode gzip zstd
+    encode gzip zstd
 
-	@api path /api/*
-	reverse_proxy qoyu-backend:8000
+    @api path /api/*
+    reverse_proxy qoyu-backend:8000
 
-	@web not path /api/*
-	reverse_proxy qoyu-web:80
+    @web not path /api/*
+    reverse_proxy qoyu-web:80
 }
-
-
