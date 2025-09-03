@@ -1,16 +1,14 @@
 {
-    email qoyucoffee@gmail.com
+    email admin@qoyucoffee.kz
 }
 
-# ----- Сайт -----
 qoyucoffee.kz, www.qoyucoffee.kz {
     encode gzip zstd
 
-    # Явно задаём единственного эмитента: ACME (Let's Encrypt) и STAGING-CA
     tls {
         issuer acme {
-            ca https://acme-staging-v02.api.letsencrypt.org/directory
-            email qoyucoffee@gmail.com
+            # строку 'ca https://acme-staging...' УДАЛИЛИ
+            email admin@qoyucoffee.kz
         }
     }
 
@@ -20,4 +18,3 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     @web not path /api/*
     reverse_proxy web:80
 }
-
