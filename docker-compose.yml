@@ -20,26 +20,35 @@ services:
       context: ./backend
     container_name: qoyu-backend
     env_file:
-      - ./backend/.env          # ВАЖНО: относительный путь, не /backend/.env
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - media:/media
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: always
 
   web:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: /api      # фронт ходит на /api — без CORS
+        VITE_API_URL: /api        # фронт ходит на /api без CORS
     container_name: qoyu-web
     depends_on:
       - backend
+    expose:
+      - "80"
     restart: always
-    # Порты не открываем — наружу слушает Caddy
-    volumes:
-      - ./nginx/qoyu.conf:/etc/nginx/conf.d/default.conf:ro
+    # ВАЖНО: nginx-конфиг уже встроен в образ (frontend/nginx/default.conf).
+    # НЕ монтируйте nginx.conf через volumes, чтобы избежать ошибок 'not a directory'.
 
   caddy:
     image: caddy:2.7-alpine
