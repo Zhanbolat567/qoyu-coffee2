@@ -31,7 +31,9 @@ type ProductInfo = {
 const formatKZT = (n: number) => n.toLocaleString("ru-RU");
 
 /* ====================== PRODUCT MODAL ====================== */
-/** Модалка товара. ВАЖНО: скидка применяется ко ВСЕЙ позиции (база + опции). */
+/** Модалка товара. Скидка применяется ко ВСЕЙ позиции (база + опции).
+ * Группа «Размер» работает как НАДБАВКА к базовой цене товара.
+ */
 function ProductOptionsModal({
   product,
   groups,
@@ -45,7 +47,7 @@ function ProductOptionsModal({
   onClose: () => void;
   onAdd: (payload: {
     unit_price: number;        // конечная цена единицы (после скидки)
-    base_unit_price: number;   // база для сервера (= unit_price - сумма выбранных опций)
+    base_unit_price: number;   // база для сервера (= unit_price - сумма выбранных опций БЕЗ размера)
     orig_unit_price: number;   // цена до скидки (для зачёркнутого)
     option_item_ids: number[];
     option_names: string[];
@@ -65,6 +67,11 @@ function ProductOptionsModal({
     return g;
   }, [groups]);
 
+  const sizeGroup = useMemo(
+    () => sortedGroups.find((gg) => gg.name.toLowerCase() === "размер") || null,
+    [sortedGroups]
+  );
+
   const [selected, setSelected] = useState<Record<number, number[]>>({});
 
   useEffect(() => {
@@ -75,31 +82,57 @@ function ProductOptionsModal({
     setSelected(init);
   }, [sortedGroups]);
 
-  /** Сумма выбранных опций */
-  const optionsSum = useMemo(() => {
+  /** сумма опций КРОМЕ «Размер» (размер считаем отдельно как надбавку) */
+  const otherOptionsSum = useMemo(() => {
     const ids = new Set(Object.values(selected).flat());
     let s = 0;
-    for (const g of sortedGroups) for (const it of g.items) if (ids.has(it.id)) s += it.price;
+    for (const g of sortedGroups) {
+      if (sizeGroup && g.id === sizeGroup.id) continue;
+      for (const it of g.items) if (ids.has(it.id)) s += it.price;
+    }
     return s;
-  }, [selected, sortedGroups]);
+  }, [selected, sortedGroups, sizeGroup]);
 
-  /** Полная цена ДО скидки: база + опции (ИМЕННО ТАК теперь считаем скидку) */
+  /** надбавка за выбранный размер */
+  const sizeAddon = useMemo(() => {
+    if (!sizeGroup) return 0;
+    const picked = selected[sizeGroup.id]?.[0];
+    if (!picked) return 0;
+    const item = sizeGroup.items.find((i) => i.id === picked);
+    return item ? Number(item.price) : 0;
+  }, [selected, sizeGroup]);
+
+  /** полная цена ДО скидки = базовая цена товара + надбавка за размер + прочие опции */
   const fullBefore = useMemo(
-    () => Math.max(0, Number(product.base_price) + optionsSum),
-    [product.base_price, optionsSum]
+    () => Math.max(0, Number(product.base_price) + sizeAddon + otherOptionsSum),
+    [product.base_price, sizeAddon, otherOptionsSum]
   );
 
-  /** Итоговая цена ПОСЛЕ скидки на всю позицию */
+  /** цена ПОСЛЕ скидки на всю позицию */
   const discountedTotal = useMemo(() => {
     if (!discountPct) return fullBefore;
-    return Math.max(0, Math.round(fullBefore * (100 - discountPct) / 100));
+    return Math.max(0, Math.round((fullBefore * (100 - discountPct)) / 100));
   }, [fullBefore, discountPct]);
 
-  /** База для сервера: так, чтобы (эта база + опции) == discountedTotal */
+  /** база для сервера: так, чтобы (эта база + прочие опции + размер) == discountedTotal.
+   * Сервер складывает: unit_price_base + суммы опций (включая размер).
+   * Чтобы сумма совпала, достаточно вычесть из финала ВСЕ опции (и размер тоже).
+   * Но обычно на сервер мы пробрасывали только базу без «прочих опций», а размер
+   * в БД — тоже опция. Поэтому корректнее вычесть именно ВСЕ выбранные опции.
+   */
   const baseForServer = useMemo(
-    () => Math.max(0, discountedTotal - optionsSum),
-    [discountedTotal, optionsSum]
+    () => Math.max(0, discountedTotal - (sizeAddon + otherOptionsSum)),
+    [discountedTotal, sizeAddon, otherOptionsSum]
   );
+
+  /** Для кнопок «Размер» показываем «цена за размер» (без учёта прочих опций),
+   * чтобы бариста сразу видел 250/350/450 → конечную цену товара по размеру.
+   */
+  const priceForSize = (addon: number) => {
+    const before = Math.max(0, Number(product.base_price) + addon);
+    if (!discountPct) return before;
+    return Math.max(0, Math.round((before * (100 - discountPct)) / 100));
+  };
 
   const toggle = (gid: number, iid: number, type: "single" | "multi") => {
     setSelected((prev) => {
@@ -116,7 +149,7 @@ function ProductOptionsModal({
     );
     onAdd({
       unit_price: discountedTotal,      // конечная цена за единицу позиции
-      base_unit_price: baseForServer,   // база с «вшитой» скидкой, чтобы сервер прибавив опции получил ту же сумму
+      base_unit_price: baseForServer,   // база с «вшитой» скидкой, чтобы сервер, прибавив опции, получил ту же сумму
       orig_unit_price: fullBefore,      // зачёркнутый «до скидки»
       option_item_ids,
       option_names,
@@ -159,16 +192,17 @@ function ProductOptionsModal({
 
         <div className="overflow-y-auto px-6 py-2 space-y-5 flex-shrink" style={{ maxHeight: "50vh" }}>
           {sortedGroups.map((g) => {
-            const isSize = g.name.toLowerCase() === "размер";
+            const isSize = sizeGroup && g.id === sizeGroup.id;
             return (
               <div key={g.id}>
                 <h3 className="font-semibold mb-3 text-lg">{g.name}</h3>
 
                 {isSize ? (
-                  // Сегменты «Размер»
+                  // Сегменты «Размер» + отображение ИТОГОВОЙ цены за размер (с учётом скидки)
                   <div className="flex items-center border border-gray-200 rounded-xl p-1">
                     {g.items.map((it) => {
                       const on = selected[g.id]?.includes(it.id);
+                      const price = priceForSize(Number(it.price));
                       return (
                         <button
                           key={it.id}
@@ -176,9 +210,11 @@ function ProductOptionsModal({
                           className={`flex-1 py-2 text-center rounded-lg font-medium transition-colors ${
                             on ? "bg-gray-800 text-white" : "hover:bg-gray-100 text-gray-700"
                           }`}
-                          title={it.price ? (it.price > 0 ? `+${it.price} ₸` : `${it.price} ₸`) : "Без доплаты"}
                         >
-                          {it.name}
+                          <div>{it.name}</div>
+                          <div className={`text-xs ${on ? "text-white/80" : "text-gray-500"}`}>
+                            {formatKZT(price)} ₸
+                          </div>
                         </button>
                       );
                     })}
@@ -353,7 +389,6 @@ function CreateOrderComponent() {
     discount_pct: number | null;
   }) => {
     if (!modalProduct) return;
-    // поле base_unit_price/discount_pct присутствует в типах корзины (lib/cart.ts). Если у тебя строгий TS — можно сделать `as any`.
     addItem({
       product_id: modalProduct.id,
       name: modalProduct.name,
@@ -380,16 +415,16 @@ function CreateOrderComponent() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm font-semibold mr-2">Скидка:</div>
             {[20, 30, 50].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setDiscountPct(p)}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${
-                    discountPct === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-gray-50"
-                  }`}
-                >
-                  −{p}%
-                </button>
-              ))}
+              <button
+                key={p}
+                onClick={() => setDiscountPct(p)}
+                className={`px-3 py-1.5 rounded-full text-sm border ${
+                  discountPct === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-gray-50"
+                }`}
+              >
+                −{p}%
+              </button>
+            ))}
             <button onClick={clearDiscount} className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50">
               Сброс
             </button>
@@ -414,7 +449,7 @@ function CreateOrderComponent() {
               })}
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              * Здесь скидка применяется ко всей позиции (база + опции).
+              * Скидка применяется ко всей позиции (база + опции).
             </div>
           </div>
         </div>
@@ -459,11 +494,10 @@ function CreateOrderComponent() {
             >
               <h2 className="text-2xl font-bold text-gray-800 mb-4">{cat}</h2>
 
-              {/* ВАЖНО для планшета в альбомной: три карточки начиная с lg */}
+              {/* планшет (альбомный) и выше — 3 карточки */}
               <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {(byCat[cat] || []).map((p) => {
                   const hasDisc = discountPct && discountCats.has(cat);
-                  // Показ цены в карточке: используем тот же принцип — скидка от полной (только без опций, т.к. их ещё не знаем).
                   const discounted = hasDisc
                     ? Math.max(0, Math.round(Number(p.price) * (100 - (discountPct as number)) / 100))
                     : Number(p.price);
