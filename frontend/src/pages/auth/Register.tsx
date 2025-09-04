@@ -102,8 +102,7 @@ export default function Register() {
             />
           </div>
         </div>
-
-        {err && <div className="text-red-600 text-sm">{err}</div>}
+        {err && <div className="text-red-600 text-sm">{err}</div>}      
         </div>
       </form>
     </div>
