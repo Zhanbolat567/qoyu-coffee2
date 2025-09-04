@@ -74,6 +74,9 @@ export default function Login() {
         >
           {loading ? 'Входим…' : 'Войти'}
         </button>
+
+        <div className="text-center text-sm text-slate-600">
+          Нет аккаунта? <Link className="text-blue-600" to="/register">Зарегистрироваться</Link>
         </div>
       </form>
     </div>
