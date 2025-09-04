@@ -494,7 +494,7 @@ function CreateOrderComponent() {
               <h2 className="text-2xl font-bold text-gray-800 mb-4">{cat}</h2>
 
               {/* планшет=2, компьютер=3 */}
-              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                 {(byCat[cat] || []).map((p) => {
                   const hasDisc = discountPct && discountCats.has(cat);
                   const discounted = hasDisc
