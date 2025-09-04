@@ -104,17 +104,6 @@ export default function Register() {
         </div>
 
         {err && <div className="text-red-600 text-sm">{err}</div>}
-
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white rounded-lg py-2 font-medium"
-        >
-          {saving ? 'Сохраняем…' : 'Зарегистрироваться'}
-        </button>
-
-        <div className="text-center text-sm text-slate-600">
-          Уже есть аккаунт? <Link className="text-blue-600" to="/login">Войти</Link>
         </div>
       </form>
     </div>
