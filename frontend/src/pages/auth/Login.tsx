@@ -1,42 +1,66 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Phone as PhoneIcon, Lock } from 'lucide-react';
+import { User as UserIcon, Phone as PhoneIcon, Lock } from 'lucide-react';
 
-export default function Login() {
+export default function Register() {
   const nav = useNavigate();
-  const { login } = useAuth();
+  const { register } = useAuth();
 
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    if (!phone || !password) {
-      setErr('Заполните номер телефона и пароль');
+
+    if (!name || !phone || !password || !confirm) {
+      setErr('Заполните все поля');
       return;
     }
+    if (password.length < 6) {
+      setErr('Пароль должен быть не короче 6 символов');
+      return;
+    }
+    if (password !== confirm) {
+      setErr('Пароли не совпадают');
+      return;
+    }
+
     try {
-      setLoading(true);
-      await login(phone.trim(), password);   // кука ставится на бэке
-      // куда вести после входа — выбери нужный маршрут
-      nav('/orders/active', { replace: true });
+      setSaving(true);
+      await register(name.trim(), phone.trim(), password);
+      nav('/orders/active'); // уже залогинен cookie
     } catch (ex: any) {
-      setErr(ex?.message || 'Неверный номер или пароль');
+      setErr(ex?.message || 'Ошибка регистрации');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   return (
     <div className="min-h-screen grid place-items-center bg-slate-100 p-6">
       <form onSubmit={submit} className="w-full max-w-md bg-white rounded-2xl shadow p-6 space-y-4">
-        <div className="text-center">
+        <div className="text-center mb-1">
           <div className="text-2xl font-extrabold tracking-wide">QOYU Coffee</div>
-          <div className="text-slate-500 mt-1">Вход для персонала</div>
+          <div className="text-slate-500 mt-1">Регистрация нового кассира</div>
+        </div>
+
+        <div>
+          <div className="text-sm mb-1">Имя пользователя</div>
+          <div className="relative">
+            <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              className="w-full border rounded-lg px-10 py-2 outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Например, Алишер"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
         </div>
 
         <div>
@@ -59,21 +83,27 @@ export default function Login() {
             <input
               type="password"
               className="w-full border rounded-lg px-10 py-2 outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Минимум 6 символов"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
         </div>
 
-        {err && <div className="text-red-600 text-sm">{err}</div>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-lg py-2 font-medium"
-        >
-          {loading ? 'Входим…' : 'Войти'}
-        </button>
+        <div>
+          <div className="text-sm mb-1">Подтвердите пароль</div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="password"
+              className="w-full border rounded-lg px-10 py-2 outline-none focus:ring-2 focus:ring-blue-200"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          </div>
+        </div>
+        {err && <div className="text-red-600 text-sm">{err}</div>}    
+        </div>
       </form>
     </div>
   );
