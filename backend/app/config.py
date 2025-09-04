@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # auth/jwt
     secret_key: str = "change-me"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 43200
 
     # cookie
     cookie_name: str = "access_token"
