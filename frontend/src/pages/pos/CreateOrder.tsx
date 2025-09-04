@@ -29,11 +29,10 @@ type ProductInfo = {
 
 /* ====================== HELPERS ====================== */
 const formatKZT = (n: number) => n.toLocaleString("ru-RU");
+const isSizeName = (s: string) => s.trim().toLowerCase().startsWith("размер");
 
 /* ====================== PRODUCT MODAL ====================== */
-/** Модалка товара. Скидка применяется ко ВСЕЙ позиции (база + опции).
- * Группа «Размер» работает как НАДБАВКА к базовой цене товара.
- */
+/** Скидка применяется ко ВСЕЙ позиции (база + размер + прочие опции). */
 function ProductOptionsModal({
   product,
   groups,
@@ -47,28 +46,28 @@ function ProductOptionsModal({
   onClose: () => void;
   onAdd: (payload: {
     unit_price: number;        // конечная цена единицы (после скидки)
-    base_unit_price: number;   // база для сервера (= unit_price - сумма выбранных опций БЕЗ размера)
+    base_unit_price: number;   // база для сервера (= unit_price - сумма ВСЕХ выбранных опций, включая размер)
     orig_unit_price: number;   // цена до скидки (для зачёркнутого)
     option_item_ids: number[];
     option_names: string[];
     discount_pct: number | null;
   }) => void;
 }) {
-  // «Размер» показываем первой, если есть.
+  // «Размер» показываем первой, если есть (имя начинается с "Размер")
   const sortedGroups = useMemo(() => {
     const g = [...groups];
     g.sort((a, b) => {
-      const an = a.name.toLowerCase();
-      const bn = b.name.toLowerCase();
-      if (an === "размер" && bn !== "размер") return -1;
-      if (bn === "размер" && an !== "размер") return 1;
+      const aIs = isSizeName(a.name);
+      const bIs = isSizeName(b.name);
+      if (aIs && !bIs) return -1;
+      if (bIs && !aIs) return 1;
       return 0;
     });
     return g;
   }, [groups]);
 
   const sizeGroup = useMemo(
-    () => sortedGroups.find((gg) => gg.name.toLowerCase() === "размер") || null,
+    () => sortedGroups.find((gg) => isSizeName(gg.name)) || null,
     [sortedGroups]
   );
 
@@ -114,20 +113,13 @@ function ProductOptionsModal({
     return Math.max(0, Math.round((fullBefore * (100 - discountPct)) / 100));
   }, [fullBefore, discountPct]);
 
-  /** база для сервера: так, чтобы (эта база + прочие опции + размер) == discountedTotal.
-   * Сервер складывает: unit_price_base + суммы опций (включая размер).
-   * Чтобы сумма совпала, достаточно вычесть из финала ВСЕ опции (и размер тоже).
-   * Но обычно на сервер мы пробрасывали только базу без «прочих опций», а размер
-   * в БД — тоже опция. Поэтому корректнее вычесть именно ВСЕ выбранные опции.
-   */
+  /** база для сервера: так, чтобы (эта база + ВСЕ опции) == discountedTotal */
   const baseForServer = useMemo(
     () => Math.max(0, discountedTotal - (sizeAddon + otherOptionsSum)),
     [discountedTotal, sizeAddon, otherOptionsSum]
   );
 
-  /** Для кнопок «Размер» показываем «цена за размер» (без учёта прочих опций),
-   * чтобы бариста сразу видел 250/350/450 → конечную цену товара по размеру.
-   */
+  /** Для кнопок «Размер» показываем «цена за размер» (без прочих опций) */
   const priceForSize = (addon: number) => {
     const before = Math.max(0, Number(product.base_price) + addon);
     if (!discountPct) return before;
@@ -148,9 +140,9 @@ function ProductOptionsModal({
       g.items.filter((i) => option_item_ids.includes(i.id)).map((i) => i.name)
     );
     onAdd({
-      unit_price: discountedTotal,      // конечная цена за единицу позиции
-      base_unit_price: baseForServer,   // база с «вшитой» скидкой, чтобы сервер, прибавив опции, получил ту же сумму
-      orig_unit_price: fullBefore,      // зачёркнутый «до скидки»
+      unit_price: discountedTotal,      // конечная цена за единицу
+      base_unit_price: baseForServer,   // база с «вшитой» скидкой
+      orig_unit_price: fullBefore,      // зачёркнутая цена
       option_item_ids,
       option_names,
       discount_pct: discountPct,
@@ -198,7 +190,7 @@ function ProductOptionsModal({
                 <h3 className="font-semibold mb-3 text-lg">{g.name}</h3>
 
                 {isSize ? (
-                  // Сегменты «Размер» + отображение ИТОГОВОЙ цены за размер (с учётом скидки)
+                  // Сегменты «Размер» + показ итоговой цены за размер
                   <div className="flex items-center border border-gray-200 rounded-xl p-1">
                     {g.items.map((it) => {
                       const on = selected[g.id]?.includes(it.id);
@@ -210,6 +202,13 @@ function ProductOptionsModal({
                           className={`flex-1 py-2 text-center rounded-lg font-medium transition-colors ${
                             on ? "bg-gray-800 text-white" : "hover:bg-gray-100 text-gray-700"
                           }`}
+                          title={
+                            it.price
+                              ? it.price > 0
+                                ? `+${it.price} ₸`
+                                : `${it.price} ₸`
+                              : "Без доплаты"
+                          }
                         >
                           <div>{it.name}</div>
                           <div className={`text-xs ${on ? "text-white/80" : "text-gray-500"}`}>
@@ -449,7 +448,7 @@ function CreateOrderComponent() {
               })}
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              * Скидка применяется ко всей позиции (база + опции).
+              * Скидка применяется ко всей позиции (база + размер + опции).
             </div>
           </div>
         </div>
@@ -494,8 +493,8 @@ function CreateOrderComponent() {
             >
               <h2 className="text-2xl font-bold text-gray-800 mb-4">{cat}</h2>
 
-              {/* планшет (альбомный) и выше — 3 карточки */}
-              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {/* планшет=2, компьютер=3 */}
+              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                 {(byCat[cat] || []).map((p) => {
                   const hasDisc = discountPct && discountCats.has(cat);
                   const discounted = hasDisc
