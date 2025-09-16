@@ -11,7 +11,6 @@ type Item = {
   option_details?: string[];
   modifiers?: { name: string }[];
 };
-
 type Order = {
   id: number;
   customer_name: string;
@@ -38,7 +37,6 @@ function playDing() {
   } catch {}
 }
 
-/** Вырезаем из name последние скобки "(...)" как inline-опции */
 function splitNameAndInlineOptions(raw: string): { base: string; inline: string[] } {
   const s = (raw || "").trim();
   const open = s.lastIndexOf("(");
@@ -46,21 +44,17 @@ function splitNameAndInlineOptions(raw: string): { base: string; inline: string[
   if (open !== -1 && close !== -1 && close > open) {
     const base = s.slice(0, open).trim().replace(/[·\-–—,:;]+$/g, "");
     const inside = s.slice(open + 1, close).trim();
-    const parts = inside
-      .split(/[;,]/g)
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const parts = inside.split(/[;,]/g).map(x => x.trim()).filter(Boolean);
     return { base: base || s, inline: parts };
   }
   return { base: s, inline: [] };
 }
 
-/** Собираем список опций из разных полей, fallback — из name(...) */
 function normOptions(it: Item, fromNameInline: string[]): string[] {
-  if (Array.isArray(it.options) && it.options.length) return it.options;
-  if (Array.isArray(it.option_names) && it.option_names.length) return it.option_names;
-  if (Array.isArray(it.option_details) && it.option_details.length) return it.option_details;
-  if (Array.isArray(it.modifiers) && it.modifiers.length) return it.modifiers.map((m) => m.name);
+  if (it.options?.length) return it.options;
+  if (it.option_names?.length) return it.option_names;
+  if (it.option_details?.length) return it.option_details;
+  if (it.modifiers?.length) return it.modifiers.map(m => m.name);
   return fromNameInline;
 }
 
@@ -72,11 +66,11 @@ export default function OrdersActive() {
   async function fetchActive() {
     const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
     const list = Array.isArray(data) ? data : [];
-    const ids = list.map((o) => o.id);
+    const ids = list.map(o => o.id);
 
     if (!firstLoadRef.current) {
       const prev = new Set(prevIdsRef.current);
-      if (ids.some((id) => !prev.has(id))) playDing();
+      if (ids.some(id => !prev.has(id))) playDing();
     } else firstLoadRef.current = false;
 
     prevIdsRef.current = ids;
@@ -92,8 +86,8 @@ export default function OrdersActive() {
   async function finish(id: number) {
     try {
       await api.patch(`/orders/${id}/close`);
-      setOrders((p) => p.filter((o) => o.id !== id));
-      prevIdsRef.current = prevIdsRef.current.filter((x) => x !== id);
+      setOrders(p => p.filter(o => o.id !== id));
+      prevIdsRef.current = prevIdsRef.current.filter(x => x !== id);
     } catch {}
   }
 
@@ -101,13 +95,9 @@ export default function OrdersActive() {
     <div className="mx-auto max-w-screen-xl">
       <h1 className="text-3xl font-bold mb-6">Заказы</h1>
 
-      {/* 2 карточки в ряд (как на скрине) */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        {orders.map((o) => (
-          <div
-            key={o.id}
-            className="bg-white rounded-2xl shadow border border-slate-200 min-h-[260px]"
-          >
+        {orders.map(o => (
+          <div key={o.id} className="bg-white rounded-2xl shadow border border-slate-200">
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-5">
               <div className="flex items-center gap-3 text-sm">
@@ -134,22 +124,19 @@ export default function OrdersActive() {
                       <span className="text-slate-500">x{q}</span>
                     </div>
 
-                    {/* Ровная сетка чипов — не «прыгает» */}
+                    {/* ВАЖНО: flex-wrap вместо grid */}
                     {opts.length > 0 && (
-                      <ul
-                        className="mt-3 grid gap-x-3 gap-y-2
-                                   [grid-template-columns:repeat(auto-fit,minmax(120px,auto))]
-                                   justify-start items-start"
-                      >
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
                         {opts.map((label, idx) => (
-                          <li key={idx} className="w-fit">
-                            <span className="text-[12px] leading-5 px-3 py-1 rounded-full
-                                             bg-slate-100 text-slate-700 border border-slate-200">
-                              {label}
-                            </span>
-                          </li>
+                          <span
+                            key={idx}
+                            className="inline-flex items-center text-[12px] leading-5 px-3 py-1
+                                       rounded-full bg-slate-100 text-slate-700 border border-slate-200"
+                          >
+                            {label}
+                          </span>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 );
