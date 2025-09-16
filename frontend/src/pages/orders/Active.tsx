@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { CheckCircle2 } from "lucide-react";
 
-type Modifier = { name: string };
 type Item = {
   name: string;
   qty?: number;
   quantity?: number;
-  modifiers?: Modifier[];
+
+  // любые возможные источники опций из бэка
+  options?: string[];
+  option_names?: string[];
+  option_details?: string[];
+  modifiers?: { name: string }[];
 };
 type Order = {
   id: number;
@@ -17,10 +21,8 @@ type Order = {
   items: Item[];
 };
 
-const hhmm = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-};
+const hhmm = (iso: string) =>
+  new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
 function playDing() {
   try {
@@ -33,9 +35,16 @@ function playDing() {
     g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     o.connect(g).connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.28);
+    o.start(); o.stop(ctx.currentTime + 0.28);
   } catch {}
+}
+
+function normOptions(it: Item): string[] {
+  if (Array.isArray(it.options) && it.options.length) return it.options;
+  if (Array.isArray(it.option_names) && it.option_names.length) return it.option_names;
+  if (Array.isArray(it.option_details) && it.option_details.length) return it.option_details;
+  if (Array.isArray(it.modifiers) && it.modifiers.length) return it.modifiers.map(m => m.name);
+  return [];
 }
 
 export default function OrdersActive() {
@@ -50,11 +59,8 @@ export default function OrdersActive() {
 
     if (!firstLoadRef.current) {
       const prev = new Set(prevIdsRef.current);
-      const hasNew = ids.some((id) => !prev.has(id));
-      if (hasNew) playDing();
-    } else {
-      firstLoadRef.current = false;
-    }
+      if (ids.some((id) => !prev.has(id))) playDing();
+    } else firstLoadRef.current = false;
 
     prevIdsRef.current = ids;
     setOrders(list);
@@ -69,7 +75,7 @@ export default function OrdersActive() {
   async function finish(id: number) {
     try {
       await api.patch(`/orders/${id}/close`);
-      setOrders((prev) => prev.filter((o) => o.id !== id));
+      setOrders((p) => p.filter((o) => o.id !== id));
       prevIdsRef.current = prevIdsRef.current.filter((x) => x !== id);
     } catch {}
   }
@@ -78,43 +84,43 @@ export default function OrdersActive() {
     <div className="mx-auto max-w-screen-xl">
       <h1 className="text-3xl font-bold mb-6">Заказы</h1>
 
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
+      {/* как на скрине: 2 карточки в ряд */}
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         {orders.map((o) => (
-          <div
-            key={o.id}
-            className="bg-white rounded-xl shadow border border-slate-200"
-          >
+          <div key={o.id} className="bg-white rounded-2xl shadow border border-slate-200">
             {/* header */}
-            <div className="flex items-center justify-between px-4 pt-4">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-bold">{o.id}</span>
-                <span className="text-slate-600">{o.customer_name || "Гость"}</span>
+            <div className="flex items-center justify-between px-6 pt-5">
+              <div className="flex items-center gap-3 text-sm">
+                <span className="font-extrabold text-[18px] leading-none">{o.id}</span>
+                <span className="text-slate-700 font-medium">{o.customer_name || "Гость"}</span>
                 <span className="text-slate-400">{hhmm(o.created_at)}</span>
               </div>
-              <span className="inline-block text-xs px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
+              <span className="text-xs px-3 py-1 rounded-md bg-emerald-100 text-emerald-700">
                 активен
               </span>
             </div>
 
             {/* items */}
-            <div className="px-4 py-3 space-y-3">
+            <div className="px-6 py-4 space-y-4">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
+                const opts = normOptions(it);
                 return (
                   <div key={i} className="text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex items-start justify-between">
                       <span className="font-medium">{it.name}</span>
                       <span className="text-slate-500">x{q}</span>
                     </div>
-                    {/* модификаторы */}
-                    {it.modifiers && it.modifiers.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {it.modifiers.map((m, idx) => (
+
+                    {/* чипы опций точно как на макете */}
+                    {opts.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {opts.map((label, idx) => (
                           <span
                             key={idx}
-                            className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-700"
+                            className="text-[12px] leading-5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200"
                           >
-                            {m.name}
+                            {label}
                           </span>
                         ))}
                       </div>
@@ -125,18 +131,16 @@ export default function OrdersActive() {
             </div>
 
             {/* total */}
-            <div className="border-t px-4 py-3 flex items-center justify-between">
-              <div className="font-semibold">Итого:</div>
-              <div className="font-semibold">
-                {Number(o.total).toLocaleString("ru-RU")} ₸
-              </div>
+            <div className="border-t px-6 py-3 flex items-center justify-between">
+              <div className="text-slate-600 font-semibold">Итого:</div>
+              <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
             </div>
 
-            {/* finish */}
-            <div className="px-4 pb-4">
+            {/* finish button как на картинке */}
+            <div className="px-6 pb-5">
               <button
                 onClick={() => finish(o.id)}
-                className="w-full rounded-md py-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white inline-flex items-center justify-center gap-2"
+                className="w-full rounded-md py-2.5 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white inline-flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={18} />
                 Завершить заказ
@@ -145,9 +149,7 @@ export default function OrdersActive() {
           </div>
         ))}
 
-        {!orders.length && (
-          <div className="text-slate-500">Нет активных заказов</div>
-        )}
+        {!orders.length && <div className="text-slate-500">Нет активных заказов</div>}
       </div>
     </div>
   );
