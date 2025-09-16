@@ -1,3 +1,4 @@
+// src/pages/pos/OrdersActive.tsx
 import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { CheckCircle2 } from "lucide-react";
@@ -8,6 +9,7 @@ type Item = {
   qty?: number;
   quantity?: number;
 
+  // возможные варианты от бэка
   options?: string[];
   option_names?: string[];
   option_details?: string[];
@@ -40,7 +42,7 @@ function playDing() {
   } catch {}
 }
 
-/** Вырезаем последние скобки "(...)" из name как inline-опции */
+/** Вырезаем из name последние скобки "(…)" как inline-опции */
 function splitNameAndInlineOptions(raw: string): { base: string; inline: string[] } {
   const s = (raw || "").trim();
   const open = s.lastIndexOf("(");
@@ -53,6 +55,8 @@ function splitNameAndInlineOptions(raw: string): { base: string; inline: string[
   }
   return { base: s, inline: [] };
 }
+
+/** Собираем список опций из разных полей, если их нет — берём из name(...) */
 function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (it.options?.length) return it.options;
   if (it.option_names?.length) return it.option_names;
@@ -61,7 +65,7 @@ function normOptions(it: Item, fromNameInline: string[]): string[] {
   return fromNameInline;
 }
 
-/* ===== Группировка опций ===== */
+/* ===== Группировка и порядок ===== */
 const GROUP_ORDER = [
   "Размер",
   "Молоко",
@@ -77,8 +81,8 @@ const RULES: Record<GroupName, RegExp[]> = {
   Размер: [/\bразмер\b/i, /\b\d{2,3}\s*мл\b/i, /\b0[.,]?\d+\s*л\b/i, /\b(200|250|300|350|400|450|500)\b/i],
   Молоко: [/молок/i, /сливк/i, /овсян/i, /соев/i, /кокосов/i, /миндал/i, /безлакт/i, /лактоз/i],
   Сироп: [
-    /сироп/i, /ванил/i, /карамел/i, /солен/i, /фунд/i, /орех/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i, /кокос(?!ов)/i,
-    /банан/i, /апельсин/i, /вишн/i, /какао/i, /попкорн/i,
+    /сироп/i, /ванил/i, /карамел/i, /солен/i, /фунд/i, /орех/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i,
+    /кокос(?!ов)/i, /банан/i, /апельсин/i, /вишн/i, /какао/i, /попкорн/i,
   ],
   "Доп. шот": [/шот/i, /\bэспрессо\b/i, /double/i, /доп\.\s*шот/i],
   Сахар: [/сахар/i, /без\s*сахара/i, /стеви/i, /подсласт/i],
@@ -86,9 +90,8 @@ const RULES: Record<GroupName, RegExp[]> = {
   Прочее: [],
 };
 
-function cleanLabel(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
+const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+
 function detectGroup(label: string): GroupName {
   const txt = label.toLowerCase();
   for (const g of GROUP_ORDER) {
@@ -97,25 +100,27 @@ function detectGroup(label: string): GroupName {
   }
   return "Прочее";
 }
-function groupOptions(opts: string[]) {
-  const res: Record<GroupName, string[]> = {
+
+function orderOptionsFlat(opts: string[]): string[] {
+  const buckets: Record<GroupName, string[]> = {
     Размер: [], Молоко: [], Сироп: [], "Доп. шот": [], Сахар: [], Температура: [], Прочее: [],
   };
   const seen = new Set<string>();
   for (const raw of opts) {
-    const label = cleanLabel(raw);
+    const label = clean(raw);
     if (!label || seen.has(label)) continue;
     seen.add(label);
-    res[detectGroup(label)].push(label);
+    buckets[detectGroup(label)].push(label);
   }
-  // порядок внутри групп
-  res["Размер"].sort((a, b) => {
+  // сортировка внутри групп
+  buckets["Размер"].sort((a, b) => {
     const na = Number((a.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
     const nb = Number((b.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
     return na - nb || a.localeCompare(b, "ru");
   });
-  for (const g of GROUP_ORDER) if (g !== "Размер") res[g].sort((a, b) => a.localeCompare(b, "ru"));
-  return res;
+  for (const g of GROUP_ORDER) if (g !== "Размер") buckets[g].sort((a, b) => a.localeCompare(b, "ru"));
+  // плоский список по заданному порядку групп
+  return GROUP_ORDER.flatMap(g => buckets[g]);
 }
 
 /* ===== Component ===== */
@@ -128,10 +133,12 @@ export default function OrdersActive() {
     const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
     const list = Array.isArray(data) ? data : [];
     const ids = list.map(o => o.id);
+
     if (!firstLoadRef.current) {
       const prev = new Set(prevIdsRef.current);
       if (ids.some((id) => !prev.has(id))) playDing();
     } else firstLoadRef.current = false;
+
     prevIdsRef.current = ids;
     setOrders(list);
   }
@@ -172,7 +179,7 @@ export default function OrdersActive() {
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
                 const { base, inline } = splitNameAndInlineOptions(it.name || "");
-                const grouped = groupOptions(normOptions(it, inline));
+                const orderedChips = orderOptionsFlat(normOptions(it, inline));
 
                 return (
                   <div key={i} className="text-sm">
@@ -181,23 +188,20 @@ export default function OrdersActive() {
                       <span className="text-slate-500">x{q}</span>
                     </div>
 
-                    {/* групповые блоки в строго заданном порядке */}
-                    {GROUP_ORDER.map((g, gi) =>
-                      grouped[g].length ? (
-                        <div key={g} className={gi === 0 ? "mt-2" : "mt-1.5"}>
-                          <div className="flex flex-wrap gap-x-3 gap-y-2">
-                            {grouped[g].map((label) => (
-                              <span
-                                key={g + label}
-                                className="inline-flex items-center text-[12px] leading-5 px-3 py-1
-                                           rounded-full bg-slate-100 text-slate-700 border border-slate-200"
-                              >
-                                {label}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null
+                    {/* единый блок чипов — горизонтально с переносом, в нужном порядке */}
+                    {orderedChips.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+                        {orderedChips.map((label) => (
+                          <span
+                            key={label}
+                            className="inline-flex items-center px-3 py-1 text-[12px] leading-5
+                                       rounded-full bg-slate-100 text-slate-700 border border-slate-200
+                                       whitespace-nowrap"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 );
