@@ -11,6 +11,7 @@ type Item = {
   option_details?: string[];
   modifiers?: { name: string }[];
 };
+
 type Order = {
   id: number;
   customer_name: string;
@@ -37,36 +38,29 @@ function playDing() {
   } catch {}
 }
 
-/** Если бэк прислал опции внутри name: "Латте (Соль карамель, Эспрессо; 350 мл)" */
+/** Вырезаем из name последние скобки "(...)" как inline-опции */
 function splitNameAndInlineOptions(raw: string): { base: string; inline: string[] } {
-  if (!raw) return { base: "", inline: [] };
-  const s = raw.trim();
-
-  // находим ПОСЛЕДНЮЮ пару скобок — именно там обычно опции
+  const s = (raw || "").trim();
   const open = s.lastIndexOf("(");
   const close = s.lastIndexOf(")");
   if (open !== -1 && close !== -1 && close > open) {
     const base = s.slice(0, open).trim().replace(/[·\-–—,:;]+$/g, "");
     const inside = s.slice(open + 1, close).trim();
-
-    // делим по запятым/точкам с запятой
     const parts = inside
       .split(/[;,]/g)
       .map((x) => x.trim())
       .filter(Boolean);
-
     return { base: base || s, inline: parts };
   }
   return { base: s, inline: [] };
 }
 
+/** Собираем список опций из разных полей, fallback — из name(...) */
 function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (Array.isArray(it.options) && it.options.length) return it.options;
   if (Array.isArray(it.option_names) && it.option_names.length) return it.option_names;
   if (Array.isArray(it.option_details) && it.option_details.length) return it.option_details;
   if (Array.isArray(it.modifiers) && it.modifiers.length) return it.modifiers.map((m) => m.name);
-
-  // если ничего не пришло, используем те, что вытащили из name(...)
   return fromNameInline;
 }
 
@@ -107,11 +101,14 @@ export default function OrdersActive() {
     <div className="mx-auto max-w-screen-xl">
       <h1 className="text-3xl font-bold mb-6">Заказы</h1>
 
-      {/* 2 карточки в ряд как на макете */}
+      {/* 2 карточки в ряд (как на скрине) */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         {orders.map((o) => (
-          <div key={o.id} className="bg-white rounded-2xl shadow border border-slate-200">
-            {/* header */}
+          <div
+            key={o.id}
+            className="bg-white rounded-2xl shadow border border-slate-200 min-h-[260px]"
+          >
+            {/* Header */}
             <div className="flex items-center justify-between px-6 pt-5">
               <div className="flex items-center gap-3 text-sm">
                 <span className="font-extrabold text-[18px] leading-none">{o.id}</span>
@@ -123,14 +120,11 @@ export default function OrdersActive() {
               </span>
             </div>
 
-            {/* items */}
+            {/* Items */}
             <div className="px-6 py-4 space-y-4">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
-
-                // 1) вытаскиваем из name базовое имя и inline-опции
                 const { base, inline } = splitNameAndInlineOptions(it.name || "");
-                // 2) собираем нормальные опции (API-поля > inline)
                 const opts = normOptions(it, inline);
 
                 return (
@@ -140,31 +134,35 @@ export default function OrdersActive() {
                       <span className="text-slate-500">x{q}</span>
                     </div>
 
-                    {/* чипы опций, как на картинке */}
+                    {/* Ровная сетка чипов — не «прыгает» */}
                     {opts.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-8">
+                      <ul
+                        className="mt-3 grid gap-x-3 gap-y-2
+                                   [grid-template-columns:repeat(auto-fit,minmax(120px,auto))]
+                                   justify-start items-start"
+                      >
                         {opts.map((label, idx) => (
-                          <span
-                            key={idx}
-                            className="text-[12px] leading-5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200"
-                          >
-                            {label}
-                          </span>
+                          <li key={idx} className="w-fit">
+                            <span className="text-[12px] leading-5 px-3 py-1 rounded-full
+                                             bg-slate-100 text-slate-700 border border-slate-200">
+                              {label}
+                            </span>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     )}
                   </div>
                 );
               })}
             </div>
 
-            {/* total */}
+            {/* Total */}
             <div className="border-t px-6 py-3 flex items-center justify-between">
               <div className="text-slate-600 font-semibold">Итого:</div>
               <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
             </div>
 
-            {/* finish */}
+            {/* Finish */}
             <div className="px-6 pb-5">
               <button
                 onClick={() => finish(o.id)}
