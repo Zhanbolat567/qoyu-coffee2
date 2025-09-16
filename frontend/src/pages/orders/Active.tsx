@@ -2,31 +2,33 @@ import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { CheckCircle2 } from "lucide-react";
 
-type Item = { name: string; qty?: number; quantity?: number };
+type Modifier = { name: string };
+type Item = {
+  name: string;
+  qty?: number;
+  quantity?: number;
+  modifiers?: Modifier[];
+};
 type Order = {
   id: number;
   customer_name: string;
-  take_away?: boolean;
   total: number;
   created_at: string;
   items: Item[];
 };
 
-const mmssSince = (iso: string) => {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+const hhmm = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 };
 
-// лёгкий звук-«динь» без аудиофайлов (Web Audio)
 function playDing() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = "sine";
-    o.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    o.frequency.setValueAtTime(880, ctx.currentTime);
     g.gain.setValueAtTime(0.001, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
@@ -47,12 +49,11 @@ export default function OrdersActive() {
     const ids = list.map((o) => o.id);
 
     if (!firstLoadRef.current) {
-      // Есть ли новые ID, которых раньше не было?
       const prev = new Set(prevIdsRef.current);
       const hasNew = ids.some((id) => !prev.has(id));
       if (hasNew) playDing();
     } else {
-      firstLoadRef.current = false; // первую загрузку без звука
+      firstLoadRef.current = false;
     }
 
     prevIdsRef.current = ids;
@@ -74,41 +75,50 @@ export default function OrdersActive() {
   }
 
   return (
-    <div className="mx-auto max-w-screen-2xl">
-      <h1 className="text-3xl font-bold mb-4">Заказы</h1>
+    <div className="mx-auto max-w-screen-xl">
+      <h1 className="text-3xl font-bold mb-6">Заказы</h1>
 
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
         {orders.map((o) => (
-          <div key={o.id} className="bg-white rounded-lg shadow overflow-hidden">
+          <div
+            key={o.id}
+            className="bg-white rounded-xl shadow border border-slate-200"
+          >
             {/* header */}
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 grid place-items-center rounded-md bg-slate-100 font-semibold">
-                  {o.id}
-                </div>
-                <div className="font-semibold">{o.customer_name || "Гость"}</div>
-                {o.take_away ? (
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
-                    с собой
-                  </span>
-                ) : null}
+            <div className="flex items-center justify-between px-4 pt-4">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-bold">{o.id}</span>
+                <span className="text-slate-600">{o.customer_name || "Гость"}</span>
+                <span className="text-slate-400">{hhmm(o.created_at)}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-slate-500 text-sm">{mmssSince(o.created_at)}</div>
-                <span className="inline-block text-xs px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-                  активен
-                </span>
-              </div>
+              <span className="inline-block text-xs px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
+                активен
+              </span>
             </div>
 
             {/* items */}
-            <div className="px-4 py-2 space-y-1">
+            <div className="px-4 py-3 space-y-3">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
                 return (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <div className="truncate">{it.name}</div>
-                    <div className="text-slate-500">x{q}</div>
+                  <div key={i} className="text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium">{it.name}</span>
+                      <span className="text-slate-500">x{q}</span>
+                    </div>
+                    {/* модификаторы */}
+                    {it.modifiers && it.modifiers.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {it.modifiers.map((m, idx) => (
+                          <span
+                            key={idx}
+                            className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-700"
+                          >
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -117,7 +127,9 @@ export default function OrdersActive() {
             {/* total */}
             <div className="border-t px-4 py-3 flex items-center justify-between">
               <div className="font-semibold">Итого:</div>
-              <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
+              <div className="font-semibold">
+                {Number(o.total).toLocaleString("ru-RU")} ₸
+              </div>
             </div>
 
             {/* finish */}
@@ -133,7 +145,9 @@ export default function OrdersActive() {
           </div>
         ))}
 
-        {!orders.length && <div className="text-slate-500">Нет активных заказов</div>}
+        {!orders.length && (
+          <div className="text-slate-500">Нет активных заказов</div>
+        )}
       </div>
     </div>
   );
