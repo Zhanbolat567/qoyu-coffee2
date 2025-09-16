@@ -198,15 +198,20 @@ export default function OrdersActive() {
                         <div key={g} className="mt-2">
                           {/* если нужны заголовки групп — раскомментируй: */}
                           {/* <div className="text-[11px] uppercase text-slate-400 mb-1">{g}</div> */}
-                         <ul className="mt-2 grid grid-cols-2 gap-2">
-  {grouped[g].map(label => (
+                        <ul className="mt-2 flex flex-col gap-2">
+  {grouped[g].map((label) => (
     <li key={g + label}>
-      <span className="inline-flex items-center w-full px-3 py-1.5 rounded-lg bg-slate-100 border text-[12px]">
+      <span
+        className="inline-flex items-center w-full justify-start
+                   text-[12px] leading-5 px-3 py-1.5 rounded-lg
+                   bg-slate-100 text-slate-700 border border-slate-200"
+      >
         {label}
       </span>
     </li>
   ))}
 </ul>
+
 
                         </div>
                       ) : null
