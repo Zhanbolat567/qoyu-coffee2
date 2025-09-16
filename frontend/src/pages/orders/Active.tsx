@@ -6,8 +6,6 @@ type Item = {
   name: string;
   qty?: number;
   quantity?: number;
-
-  // любые возможные источники опций из бэка
   options?: string[];
   option_names?: string[];
   option_details?: string[];
@@ -39,12 +37,37 @@ function playDing() {
   } catch {}
 }
 
-function normOptions(it: Item): string[] {
+/** Если бэк прислал опции внутри name: "Латте (Соль карамель, Эспрессо; 350 мл)" */
+function splitNameAndInlineOptions(raw: string): { base: string; inline: string[] } {
+  if (!raw) return { base: "", inline: [] };
+  const s = raw.trim();
+
+  // находим ПОСЛЕДНЮЮ пару скобок — именно там обычно опции
+  const open = s.lastIndexOf("(");
+  const close = s.lastIndexOf(")");
+  if (open !== -1 && close !== -1 && close > open) {
+    const base = s.slice(0, open).trim().replace(/[·\-–—,:;]+$/g, "");
+    const inside = s.slice(open + 1, close).trim();
+
+    // делим по запятым/точкам с запятой
+    const parts = inside
+      .split(/[;,]/g)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    return { base: base || s, inline: parts };
+  }
+  return { base: s, inline: [] };
+}
+
+function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (Array.isArray(it.options) && it.options.length) return it.options;
   if (Array.isArray(it.option_names) && it.option_names.length) return it.option_names;
   if (Array.isArray(it.option_details) && it.option_details.length) return it.option_details;
-  if (Array.isArray(it.modifiers) && it.modifiers.length) return it.modifiers.map(m => m.name);
-  return [];
+  if (Array.isArray(it.modifiers) && it.modifiers.length) return it.modifiers.map((m) => m.name);
+
+  // если ничего не пришло, используем те, что вытащили из name(...)
+  return fromNameInline;
 }
 
 export default function OrdersActive() {
@@ -84,7 +107,7 @@ export default function OrdersActive() {
     <div className="mx-auto max-w-screen-xl">
       <h1 className="text-3xl font-bold mb-6">Заказы</h1>
 
-      {/* как на скрине: 2 карточки в ряд */}
+      {/* 2 карточки в ряд как на макете */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         {orders.map((o) => (
           <div key={o.id} className="bg-white rounded-2xl shadow border border-slate-200">
@@ -104,17 +127,22 @@ export default function OrdersActive() {
             <div className="px-6 py-4 space-y-4">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
-                const opts = normOptions(it);
+
+                // 1) вытаскиваем из name базовое имя и inline-опции
+                const { base, inline } = splitNameAndInlineOptions(it.name || "");
+                // 2) собираем нормальные опции (API-поля > inline)
+                const opts = normOptions(it, inline);
+
                 return (
                   <div key={i} className="text-sm">
                     <div className="flex items-start justify-between">
-                      <span className="font-medium">{it.name}</span>
+                      <span className="font-medium">{base}</span>
                       <span className="text-slate-500">x{q}</span>
                     </div>
 
-                    {/* чипы опций точно как на макете */}
+                    {/* чипы опций, как на картинке */}
                     {opts.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-8">
                         {opts.map((label, idx) => (
                           <span
                             key={idx}
@@ -136,7 +164,7 @@ export default function OrdersActive() {
               <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
             </div>
 
-            {/* finish button как на картинке */}
+            {/* finish */}
             <div className="px-6 pb-5">
               <button
                 onClick={() => finish(o.id)}
