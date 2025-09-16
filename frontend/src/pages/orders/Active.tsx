@@ -8,7 +8,6 @@ type Item = {
   qty?: number;
   quantity?: number;
 
-  // возможные варианты, чем приходит с бэка
   options?: string[];
   option_names?: string[];
   option_details?: string[];
@@ -54,7 +53,6 @@ function splitNameAndInlineOptions(raw: string): { base: string; inline: string[
   }
   return { base: s, inline: [] };
 }
-
 function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (it.options?.length) return it.options;
   if (it.option_names?.length) return it.option_names;
@@ -76,27 +74,21 @@ const GROUP_ORDER = [
 type GroupName = typeof GROUP_ORDER[number];
 
 const RULES: Record<GroupName, RegExp[]> = {
-  Размер: [
-    /\bразмер\b/i, /\b\d{2,3}\s*мл\b/i, /\b0[.,]?\d+\s*л\b/i, /\b(250|300|350|400|450)\b/i,
-  ],
-  Молоко: [
-    /молок/i, /сливк/i, /овсян/i, /соев/i, /кокосов/i, /миндал/i, /безлакт/i, /лактоз/i,
-  ],
+  Размер: [/\bразмер\b/i, /\b\d{2,3}\s*мл\b/i, /\b0[.,]?\d+\s*л\b/i, /\b(200|250|300|350|400|450|500)\b/i],
+  Молоко: [/молок/i, /сливк/i, /овсян/i, /соев/i, /кокосов/i, /миндал/i, /безлакт/i, /лактоз/i],
   Сироп: [
-    /сироп/i,
-    // популярные вкусы как эвристика
-    /ванил/i, /карамел/i, /солен/i, /орех/i, /фунд/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i, /кокос/i,
+    /сироп/i, /ванил/i, /карамел/i, /солен/i, /фунд/i, /орех/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i, /кокос(?!ов)/i,
+    /банан/i, /апельсин/i, /вишн/i, /какао/i, /попкорн/i,
   ],
-  "Доп. шот": [/шот/i, /\bэспрессо\b/i, /double/i],
+  "Доп. шот": [/шот/i, /\bэспрессо\b/i, /double/i, /доп\.\s*шот/i],
   Сахар: [/сахар/i, /без\s*сахара/i, /стеви/i, /подсласт/i],
-  Температура: [/горяч/i, /холод/i, /со?\s*льдом/i, /лед/i, /прохлад/i, /температур/i, /ice/i],
+  Температура: [/горяч/i, /холод/i, /со?\s*льдом/i, /лед/i, /прохлад/i, /температур/i, /\bice\b/i],
   Прочее: [],
 };
 
 function cleanLabel(s: string) {
   return s.replace(/\s+/g, " ").trim();
 }
-
 function detectGroup(label: string): GroupName {
   const txt = label.toLowerCase();
   for (const g of GROUP_ORDER) {
@@ -105,7 +97,6 @@ function detectGroup(label: string): GroupName {
   }
   return "Прочее";
 }
-
 function groupOptions(opts: string[]) {
   const res: Record<GroupName, string[]> = {
     Размер: [], Молоко: [], Сироп: [], "Доп. шот": [], Сахар: [], Температура: [], Прочее: [],
@@ -115,10 +106,9 @@ function groupOptions(opts: string[]) {
     const label = cleanLabel(raw);
     if (!label || seen.has(label)) continue;
     seen.add(label);
-    const g = detectGroup(label);
-    res[g].push(label);
+    res[detectGroup(label)].push(label);
   }
-  // сортировка внутри групп
+  // порядок внутри групп
   res["Размер"].sort((a, b) => {
     const na = Number((a.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
     const nb = Number((b.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
@@ -182,8 +172,7 @@ export default function OrdersActive() {
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
                 const { base, inline } = splitNameAndInlineOptions(it.name || "");
-                const allOpts = normOptions(it, inline);
-                const grouped = groupOptions(allOpts);
+                const grouped = groupOptions(normOptions(it, inline));
 
                 return (
                   <div key={i} className="text-sm">
@@ -192,27 +181,21 @@ export default function OrdersActive() {
                       <span className="text-slate-500">x{q}</span>
                     </div>
 
-                    {/* Блоки по группам в заданном порядке */}
-                    {GROUP_ORDER.map((g) =>
+                    {/* групповые блоки в строго заданном порядке */}
+                    {GROUP_ORDER.map((g, gi) =>
                       grouped[g].length ? (
-                        <div key={g} className="mt-2">
-                          {/* если нужны заголовки групп — раскомментируй: */}
-                          {/* <div className="text-[11px] uppercase text-slate-400 mb-1">{g}</div> */}
-                        <ul className="mt-2 flex flex-col gap-2">
-  {grouped[g].map((label) => (
-    <li key={g + label}>
-      <span
-        className="inline-flex items-center w-full justify-start
-                   text-[12px] leading-5 px-3 py-1.5 rounded-lg
-                   bg-slate-100 text-slate-700 border border-slate-200"
-      >
-        {label}
-      </span>
-    </li>
-  ))}
-</ul>
-
-
+                        <div key={g} className={gi === 0 ? "mt-2" : "mt-1.5"}>
+                          <div className="flex flex-wrap gap-x-3 gap-y-2">
+                            {grouped[g].map((label) => (
+                              <span
+                                key={g + label}
+                                className="inline-flex items-center text-[12px] leading-5 px-3 py-1
+                                           rounded-full bg-slate-100 text-slate-700 border border-slate-200"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       ) : null
                     )}
