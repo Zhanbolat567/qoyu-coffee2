@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api/client";
 import { useCart } from "../../lib/cart";
 import CartDrawer from "./components/CartDrawer";
-import { Plus } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react"; // ← NEW
 
 /* ====================== TYPES ====================== */
 type ProductMin = { id: number; name: string; price: number; image_url?: string | null };
@@ -36,7 +36,7 @@ const isSizeName = (s: string) => s.trim().toLowerCase().startsWith("разме�
 function ProductOptionsModal({
   product,
   groups,
-  discountPct, // активная скидка для товара (если категория отмечена в панели скидок)
+  discountPct,
   onClose,
   onAdd,
 }: {
@@ -45,15 +45,14 @@ function ProductOptionsModal({
   discountPct: number | null;
   onClose: () => void;
   onAdd: (payload: {
-    unit_price: number;        // конечная цена единицы (после скидки)
-    base_unit_price: number;   // база для сервера (= unit_price - сумма ВСЕХ выбранных опций, включая размер)
-    orig_unit_price: number;   // цена до скидки (для зачёркнутого)
+    unit_price: number;
+    base_unit_price: number;
+    orig_unit_price: number;
     option_item_ids: number[];
     option_names: string[];
     discount_pct: number | null;
   }) => void;
 }) {
-  // «Размер» показываем первой, если есть (имя начинается с "Размер")
   const sortedGroups = useMemo(() => {
     const g = [...groups];
     g.sort((a, b) => {
@@ -81,7 +80,6 @@ function ProductOptionsModal({
     setSelected(init);
   }, [sortedGroups]);
 
-  /** сумма опций КРОМЕ «Размер» (размер считаем отдельно как надбавку) */
   const otherOptionsSum = useMemo(() => {
     const ids = new Set(Object.values(selected).flat());
     let s = 0;
@@ -92,7 +90,6 @@ function ProductOptionsModal({
     return s;
   }, [selected, sortedGroups, sizeGroup]);
 
-  /** надбавка за выбранный размер */
   const sizeAddon = useMemo(() => {
     if (!sizeGroup) return 0;
     const picked = selected[sizeGroup.id]?.[0];
@@ -101,25 +98,21 @@ function ProductOptionsModal({
     return item ? Number(item.price) : 0;
   }, [selected, sizeGroup]);
 
-  /** полная цена ДО скидки = базовая цена товара + надбавка за размер + прочие опции */
   const fullBefore = useMemo(
     () => Math.max(0, Number(product.base_price) + sizeAddon + otherOptionsSum),
     [product.base_price, sizeAddon, otherOptionsSum]
   );
 
-  /** цена ПОСЛЕ скидки на всю позицию */
   const discountedTotal = useMemo(() => {
     if (!discountPct) return fullBefore;
     return Math.max(0, Math.round((fullBefore * (100 - discountPct)) / 100));
   }, [fullBefore, discountPct]);
 
-  /** база для сервера: так, чтобы (эта база + ВСЕ опции) == discountedTotal */
   const baseForServer = useMemo(
     () => Math.max(0, discountedTotal - (sizeAddon + otherOptionsSum)),
     [discountedTotal, sizeAddon, otherOptionsSum]
   );
 
-  /** Для кнопок «Размер» показываем «цена за размер» (без прочих опций) */
   const priceForSize = (addon: number) => {
     const before = Math.max(0, Number(product.base_price) + addon);
     if (!discountPct) return before;
@@ -140,9 +133,9 @@ function ProductOptionsModal({
       g.items.filter((i) => option_item_ids.includes(i.id)).map((i) => i.name)
     );
     onAdd({
-      unit_price: discountedTotal,      // конечная цена за единицу
-      base_unit_price: baseForServer,   // база с «вшитой» скидкой
-      orig_unit_price: fullBefore,      // зачёркнутая цена
+      unit_price: discountedTotal,
+      base_unit_price: baseForServer,
+      orig_unit_price: fullBefore,
       option_item_ids,
       option_names,
       discount_pct: discountPct,
@@ -190,7 +183,6 @@ function ProductOptionsModal({
                 <h3 className="font-semibold mb-3 text-lg">{g.name}</h3>
 
                 {isSize ? (
-                  // Сегменты «Размер» + показ итоговой цены за размер
                   <div className="flex items-center border border-gray-200 rounded-xl p-1">
                     {g.items.map((it) => {
                       const on = selected[g.id]?.includes(it.id);
@@ -202,13 +194,7 @@ function ProductOptionsModal({
                           className={`flex-1 py-2 text-center rounded-lg font-medium transition-colors ${
                             on ? "bg-gray-800 text-white" : "hover:bg-gray-100 text-gray-700"
                           }`}
-                          title={
-                            it.price
-                              ? it.price > 0
-                                ? `+${it.price} ₸`
-                                : `${it.price} ₸`
-                              : "Без доплаты"
-                          }
+                          title={it.price ? (it.price > 0 ? `+${it.price} ₸` : `${it.price} ₸`) : "Без доплаты"}
                         >
                           <div>{it.name}</div>
                           <div className={`text-xs ${on ? "text-white/80" : "text-gray-500"}`}>
@@ -219,7 +205,6 @@ function ProductOptionsModal({
                     })}
                   </div>
                 ) : (
-                  // Прочие опции — плиткой
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                     {g.items.map((it) => {
                       const on = selected[g.id]?.includes(it.id);
@@ -276,20 +261,38 @@ function CreateOrderComponent() {
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const topRef = useRef<HTMLDivElement | null>(null);
 
-  // Панель скидок: процент и какие категории активны
   const [discountPct, setDiscountPct] = useState<number | null>(null);
   const [discountCats, setDiscountCats] = useState<Set<string>>(new Set());
 
-  // Модалка
   const [modalOpen, setModalOpen] = useState(false);
   const [modalProduct, setModalProduct] = useState<ProductInfo | null>(null);
   const [modalGroups, setModalGroups] = useState<OptionGroup[]>([]);
   const [modalDiscount, setModalDiscount] = useState<number | null>(null);
   const [loadingModal, setLoadingModal] = useState(false);
 
-  // Корзина
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { addItem } = useCart();
+
+  // ---- КОРЗИНА ----
+  const cart = useCart() as any;            // ← NEW (не ломаем твои типы)
+  const { addItem } = cart;                  // ← replace destructure
+  const itemCount: number = useMemo(         // ← NEW
+    () =>
+      Array.isArray(cart?.items)
+        ? cart.items.reduce((a: number, it: any) => a + (it.qty ?? it.quantity ?? 1), 0)
+        : 0,
+    [cart?.items]
+  );
+  const cartTotal: number = useMemo(         // ← NEW
+    () =>
+      Array.isArray(cart?.items)
+        ? cart.items.reduce(
+            (a: number, it: any) =>
+              a + (Number(it.unit_price ?? it.price ?? 0) * (it.qty ?? it.quantity ?? 1)),
+            0
+          )
+        : 0,
+    [cart?.items]
+  );
 
   /* ---- data ---- */
   useEffect(() => {
@@ -343,7 +346,6 @@ function CreateOrderComponent() {
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  /* ---- панель скидок ---- */
   const toggleCatDiscount = (cat: string) => {
     setDiscountCats((prev) => {
       const next = new Set(prev);
@@ -353,7 +355,6 @@ function CreateOrderComponent() {
   };
   const clearDiscount = () => { setDiscountPct(null); setDiscountCats(new Set()); };
 
-  /* ---- открыть карточку товара ---- */
   const openProduct = async (pid: number, catOfProduct: string) => {
     try {
       setLoadingModal(true);
@@ -366,10 +367,7 @@ function CreateOrderComponent() {
         groups = (all || []).filter((g) => p.option_group_ids.includes(g.id));
       }
       setModalGroups(groups);
-
-      // скидка активна только если категория отмечена
       setModalDiscount(discountCats.has(catOfProduct) ? discountPct : null);
-
       setModalOpen(true);
     } catch (e) {
       console.error("Не удалось загрузить детали товара", e);
@@ -378,7 +376,6 @@ function CreateOrderComponent() {
     }
   };
 
-  /* ---- получить payload из модалки и положить в корзину ---- */
   const addFromModal = (p: {
     unit_price: number;
     base_unit_price: number;
@@ -392,9 +389,9 @@ function CreateOrderComponent() {
       product_id: modalProduct.id,
       name: modalProduct.name,
       qty: 1,
-      unit_price: p.unit_price,                // конечная цена (для итого и вывода)
-      base_unit_price: p.base_unit_price,      // база (для сервера → unit_price_base)
-      orig_unit_price: p.orig_unit_price,      // зачёркнутая цена (UI)
+      unit_price: p.unit_price,
+      base_unit_price: p.base_unit_price,
+      orig_unit_price: p.orig_unit_price,
       discount_pct: p.discount_pct || undefined,
       option_item_ids: p.option_item_ids,
       option_names: p.option_names,
@@ -493,7 +490,6 @@ function CreateOrderComponent() {
             >
               <h2 className="text-2xl font-bold text-gray-800 mb-4">{cat}</h2>
 
-              {/* планшет=2, компьютер=3 */}
               <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {(byCat[cat] || []).map((p) => {
                   const hasDisc = discountPct && discountCats.has(cat);
@@ -543,6 +539,28 @@ function CreateOrderComponent() {
         </div>
       </div>
 
+      {/* ======== Плавающая кнопка «Корзина» ======== */} {/* ← NEW */}
+      <div className="fixed bottom-5 right-5 z-50">
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="relative flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800
+                     text-white rounded-full shadow-lg px-5 py-3"
+          aria-label="Открыть корзину"
+        >
+          <ShoppingCart size={20} />
+          <span className="hidden sm:inline font-semibold">Корзина</span>
+          {itemCount > 0 && (
+            <>
+              <span className="hidden sm:inline text-sm opacity-90">{formatKZT(cartTotal)} ₸</span>
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold
+                               w-6 h-6 rounded-full grid place-items-center">
+                {itemCount}
+              </span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Корзина */}
       <CartDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
@@ -557,7 +575,6 @@ function CreateOrderComponent() {
         />
       )}
 
-      {/* Лоадер модалки */}
       {loadingModal && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/20">
           <div className="px-4 py-2 rounded-lg bg-white shadow">Загрузка…</div>
