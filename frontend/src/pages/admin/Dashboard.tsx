@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api/client";
+import api from "../../api/client";
 
 type Stats = { day_sales: number; month_sales: number; day_orders: number; month_orders: number };
 type HourPoint = { hour: number; orders: number };
