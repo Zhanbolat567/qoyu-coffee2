@@ -31,7 +31,7 @@ class Product(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    category = relationship(Category)
+    category = relationship("Category")
     option_groups = relationship("OptionGroup", secondary="product_option_groups", back_populates="products")
 
 class SelectType(str, enum.Enum):
@@ -56,7 +56,7 @@ class OptionItem(Base):
     price: Mapped[float] = mapped_column(Numeric(12,2), default=0)
     image_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)  # <<<<<< добавили
 
-    group = relationship(OptionGroup, back_populates="items")
+    group = relationship("OptionGroup", back_populates="items")
 
 product_option_groups = Table(
     "product_option_groups", Base.metadata,
@@ -72,13 +72,18 @@ class OrderStatus(str, enum.Enum):
 
 class Order(Base):
     __tablename__ = "orders"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     customer_name: Mapped[str] = mapped_column(String(255))
     take_away: Mapped[bool] = mapped_column(Boolean, default=False)
-    total: Mapped[float] = mapped_column(Numeric(12,2))
+    total: Mapped[float] = mapped_column(Numeric(12, 2))
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.active, index=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     closed_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Ежедневный гостевой номер и дата его присвоения
+    guest_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    guest_date: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     items = relationship("OrderItem", cascade="all, delete-orphan", back_populates="order")
 
@@ -91,8 +96,8 @@ class OrderItem(Base):
     unit_price: Mapped[float] = mapped_column(Numeric(12,2))
     qty: Mapped[int] = mapped_column(Integer)
 
-    order = relationship(Order, back_populates="items")
-    product = relationship(Product)
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product")
     options = relationship("OrderItemOption", cascade="all, delete-orphan", back_populates="item")
 
 class OrderItemOption(Base):
@@ -103,5 +108,5 @@ class OrderItemOption(Base):
     name_snapshot: Mapped[str] = mapped_column(String(120))
     price: Mapped[float] = mapped_column(Numeric(12,2))
 
-    item = relationship(OrderItem, back_populates="options")
-    option_item = relationship(OptionItem)
+    item = relationship("OrderItem", back_populates="options")
+    option_item = relationship("OptionItem")
