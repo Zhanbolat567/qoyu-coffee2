@@ -27,6 +27,13 @@ type Order = {
 const hhmm = (iso: string) =>
   new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
+const mmssSince = (iso: string) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
 function playDing() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -129,6 +136,9 @@ export default function OrdersActive() {
   const prevIdsRef = useRef<number[]>([]);
   const firstLoadRef = useRef(true);
 
+  // локальный тикер, чтобы секундомер тикаал даже между опросами
+  const [, forceTick] = useState(0);
+
   async function fetchActive() {
     const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
     const list = Array.isArray(data) ? data : [];
@@ -145,8 +155,9 @@ export default function OrdersActive() {
 
   useEffect(() => {
     fetchActive();
-    const id = setInterval(fetchActive, 1000);
-    return () => clearInterval(id);
+    const pollId = setInterval(fetchActive, 1000); // опрос кажду ю секунду
+    const tickId = setInterval(() => forceTick(v => v + 1), 1000); // локальный тикер для mm:ss
+    return () => { clearInterval(pollId); clearInterval(tickId); };
   }, []);
 
   async function finish(id: number) {
@@ -177,7 +188,10 @@ export default function OrdersActive() {
                 </span>
 
                 <span className="text-slate-700 font-medium">{o.customer_name || "Гость"}</span>
-                <span className="text-slate-400">{hhmm(o.created_at)}</span>
+                {/* секундаммер мм:сс, а в title — исходное hh:mm */}
+                <span className="text-slate-400" title={hhmm(o.created_at)}>
+                  {mmssSince(o.created_at)}
+                </span>
               </div>
               <span className="text-xs px-3 py-1 rounded-md bg-emerald-100 text-emerald-700">
                 активен
