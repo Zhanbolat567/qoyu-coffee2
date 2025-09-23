@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, Enum, ForeignKey, DateTime, func, UniqueConstraint, Table
+from sqlalchemy import (
+    Column, Integer, String, Text, Numeric, Boolean, Enum, ForeignKey, DateTime,
+    func, UniqueConstraint, Table
+)
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .database import Base
 import enum
@@ -61,8 +64,8 @@ class OptionItem(Base):
 product_option_groups = Table(
     "product_option_groups", Base.metadata,
     Column("product_id", ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
-    Column("group_id", ForeignKey("option_groups.id", ondelete="CASCADE"), primary_key=True),
-    UniqueConstraint("product_id", "group_id")
+    Column("group_id",  ForeignKey("option_groups.id", ondelete="CASCADE"), primary_key=True),
+    UniqueConstraint("product_id", "group_id"),
 )
 
 # ---- Orders ----
@@ -76,14 +79,14 @@ class Order(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     customer_name: Mapped[str] = mapped_column(String(255))
     take_away: Mapped[bool] = mapped_column(Boolean, default=False)
-    total: Mapped[float] = mapped_column(Numeric(12, 2))
+    total: Mapped[float] = mapped_column(Numeric(12,2))
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.active, index=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     closed_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Ежедневный гостевой номер и дата его присвоения
+    # Ежедневный номер и дата его присвоения
     guest_seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    guest_date: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    guest_date: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     items = relationship("OrderItem", cascade="all, delete-orphan", back_populates="order")
 
