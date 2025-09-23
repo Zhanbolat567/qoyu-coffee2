@@ -89,7 +89,7 @@ export default function OrdersClosed() {
   useEffect(() => { fetchClosed(); }, []);
 
   async function clearHistory() {
-    try { await api.delete("/orders/closed"); } catch {}
+    try { await api.post("/orders/closed/clear"); } catch {}
     setOrders([]);
   }
 
