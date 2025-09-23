@@ -1,32 +1,26 @@
-// src/pages/pos/OrdersActive.tsx
 import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { CheckCircle2 } from "lucide-react";
 
-/* ===== Types ===== */
+/* Types */
 type Item = {
   name: string;
   qty?: number;
   quantity?: number;
-
-  // возможные варианты от бэка
   options?: string[];
   option_names?: string[];
   option_details?: string[];
   modifiers?: { name: string }[];
 };
 type Order = {
-  id: number;
+  id: number; // guest_seq
   customer_name: string;
   total: number;
   created_at: string;
   items: Item[];
 };
 
-/* ===== Utils ===== */
-const hhmm = (iso: string) =>
-  new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-
+/* Time */
 const mmssSince = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -34,26 +28,30 @@ const mmssSince = (iso: string) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-function playDing() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(880, ctx.currentTime);
-    g.gain.setValueAtTime(0.001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    o.connect(g).connect(ctx.destination);
-    o.start(); o.stop(ctx.currentTime + 0.28);
-  } catch {}
-}
-
-/** Вырезаем из name последние скобки "(…)" как inline-опции */
+/* Grouping helpers */
+const GROUP_ORDER = ["Размер", "Молоко", "Сироп", "Доп. шот", "Сахар", "Температура", "Прочее"] as const;
+type GroupName = typeof GROUP_ORDER[number];
+const RULES: Record<GroupName, RegExp[]> = {
+  Размер: [/\bразмер\b/i, /\b\d{2,3}\s*мл\b/i, /\b0[.,]?\d+\s*л\b/i, /\b(200|250|300|350|400|450|500)\b/i],
+  Молоко: [/молок/i, /сливк/i, /овсян/i, /соев/i, /кокосов/i, /миндал/i, /безлакт/i, /лактоз/i],
+  Сироп: [/сироп/i, /ванил/i, /карамел/i, /солен/i, /фунд/i, /орех/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i, /кокос(?!ов)/i, /банан/i, /апельсин/i, /вишн/i, /какао/i, /попкорн/i],
+  "Доп. шот": [/шот/i, /\bэспрессо\b/i, /double/i, /доп\.\s*шот/i],
+  Сахар: [/сахар/i, /без\s*сахара/i, /стеви/i, /подсласт/i],
+  Температура: [/горяч/i, /холод/i, /со?\s*льдом/i, /лед/i, /прохлад/i, /температур/i, /\bice\b/i],
+  Прочее: [],
+};
+const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+const detectGroup = (label: string): GroupName => {
+  const txt = label.toLowerCase();
+  for (const g of GROUP_ORDER) {
+    if (g === "Прочее") continue;
+    if (RULES[g].some(rx => rx.test(txt))) return g;
+  }
+  return "Прочее";
+};
 function splitNameAndInlineOptions(raw: string): { base: string; inline: string[] } {
   const s = (raw || "").trim();
-  const open = s.lastIndexOf("(");
-  const close = s.lastIndexOf(")");
+  const open = s.lastIndexOf("("), close = s.lastIndexOf(")");
   if (open !== -1 && close !== -1 && close > open) {
     const base = s.slice(0, open).trim().replace(/[·\-–—,:;]+$/g, "");
     const inside = s.slice(open + 1, close).trim();
@@ -62,8 +60,6 @@ function splitNameAndInlineOptions(raw: string): { base: string; inline: string[
   }
   return { base: s, inline: [] };
 }
-
-/** Собираем список опций из разных полей, если их нет — берём из name(...) */
 function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (it.options?.length) return it.options;
   if (it.option_names?.length) return it.option_names;
@@ -71,47 +67,8 @@ function normOptions(it: Item, fromNameInline: string[]): string[] {
   if (it.modifiers?.length) return it.modifiers.map(m => m.name);
   return fromNameInline;
 }
-
-/* ===== Порядок групп ===== */
-const GROUP_ORDER = [
-  "Размер",
-  "Молоко",
-  "Сироп",
-  "Доп. шот",
-  "Сахар",
-  "Температура",
-  "Прочее",
-] as const;
-type GroupName = typeof GROUP_ORDER[number];
-
-const RULES: Record<GroupName, RegExp[]> = {
-  Размер: [/\bразмер\b/i, /\b\d{2,3}\s*мл\b/i, /\b0[.,]?\d+\s*л\b/i, /\b(200|250|300|350|400|450|500)\b/i],
-  Молоко: [/молок/i, /сливк/i, /овсян/i, /соев/i, /кокосов/i, /миндал/i, /безлакт/i, /лактоз/i],
-  Сироп: [
-    /сироп/i, /ванил/i, /карамел/i, /солен/i, /фунд/i, /орех/i, /шоколад/i, /ирис/i, /клубник/i, /мят/i,
-    /кокос(?!ов)/i, /банан/i, /апельсин/i, /вишн/i, /какао/i, /попкорн/i,
-  ],
-  "Доп. шот": [/шот/i, /\bэспрессо\b/i, /double/i, /доп\.\s*шот/i],
-  Сахар: [/сахар/i, /без\s*сахара/i, /стеви/i, /подсласт/i],
-  Температура: [/горяч/i, /холод/i, /со?\s*льдом/i, /лед/i, /прохлад/i, /температур/i, /\bice\b/i],
-  Прочее: [],
-};
-
-const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-
-function detectGroup(label: string): GroupName {
-  const txt = label.toLowerCase();
-  for (const g of GROUP_ORDER) {
-    if (g === "Прочее") continue;
-    if (RULES[g].some(rx => rx.test(txt))) return g;
-  }
-  return "Прочее";
-}
-
 function orderOptionsFlat(opts: string[]): string[] {
-  const buckets: Record<GroupName, string[]> = {
-    Размер: [], Молоко: [], Сироп: [], "Доп. шот": [], Сахар: [], Температура: [], Прочее: [],
-  };
+  const buckets: Record<GroupName, string[]> = { Размер: [], Молоко: [], Сироп: [], "Доп. шот": [], Сахар: [], Температура: [], Прочее: [] };
   const seen = new Set<string>();
   for (const raw of opts) {
     const label = clean(raw);
@@ -119,45 +76,47 @@ function orderOptionsFlat(opts: string[]): string[] {
     seen.add(label);
     buckets[detectGroup(label)].push(label);
   }
-  // сортировка внутри групп
   buckets["Размер"].sort((a, b) => {
     const na = Number((a.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
     const nb = Number((b.match(/(\d{2,3})\s*мл/i)?.[1]) || 999);
     return na - nb || a.localeCompare(b, "ru");
   });
   for (const g of GROUP_ORDER) if (g !== "Размер") buckets[g].sort((a, b) => a.localeCompare(b, "ru"));
-  // плоский список по заданному порядку групп
   return GROUP_ORDER.flatMap(g => buckets[g]);
 }
 
-/* ===== Component ===== */
+/* Component */
 export default function OrdersActive() {
   const [orders, setOrders] = useState<Order[]>([]);
   const prevIdsRef = useRef<number[]>([]);
   const firstLoadRef = useRef(true);
 
-  // локальный тикер, чтобы секундомер тикаал даже между опросами
-  const [, forceTick] = useState(0);
-
   async function fetchActive() {
     const { data } = await api.get<Order[]>("/orders", { params: { status: "active" } });
     const list = Array.isArray(data) ? data : [];
     const ids = list.map(o => o.id);
-
     if (!firstLoadRef.current) {
       const prev = new Set(prevIdsRef.current);
-      if (ids.some((id) => !prev.has(id))) playDing();
+      if (ids.some(id => !prev.has(id))) {
+        try {
+          const c = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const o = c.createOscillator(); const g = c.createGain();
+          o.type = "sine"; o.frequency.setValueAtTime(880, c.currentTime);
+          g.gain.setValueAtTime(0.001, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.2, c.currentTime + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.25);
+          o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.28);
+        } catch {}
+      }
     } else firstLoadRef.current = false;
-
     prevIdsRef.current = ids;
     setOrders(list);
   }
 
   useEffect(() => {
     fetchActive();
-    const pollId = setInterval(fetchActive, 1000); // опрос кажду ю секунду
-    const tickId = setInterval(() => forceTick(v => v + 1), 1000); // локальный тикер для mm:ss
-    return () => { clearInterval(pollId); clearInterval(tickId); };
+    const id = setInterval(fetchActive, 1000);
+    return () => clearInterval(id);
   }, []);
 
   async function finish(id: number) {
@@ -175,52 +134,32 @@ export default function OrdersActive() {
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         {orders.map((o) => (
           <div key={o.id} className="bg-white rounded-2xl shadow border border-slate-200">
-            {/* Header */}
             <div className="flex items-center justify-between px-6 pt-5">
               <div className="flex items-center gap-3 text-sm">
-                {/* ID как «пилюля» */}
-                <span
-                  className="inline-flex items-center px-2.5 py-1 rounded-md
-                             border border-slate-200 bg-slate-100 text-slate-800
-                             font-semibold leading-none shadow-sm"
-                >
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-100 text-slate-800 font-semibold leading-none shadow-sm">
                   {o.id}
                 </span>
-
                 <span className="text-slate-700 font-medium">{o.customer_name || "Гость"}</span>
-                {/* секундаммер мм:сс, а в title — исходное hh:mm */}
-                <span className="text-slate-400" title={hhmm(o.created_at)}>
-                  {mmssSince(o.created_at)}
-                </span>
+                <span className="text-slate-400">{mmssSince(o.created_at)}</span>
               </div>
-              <span className="text-xs px-3 py-1 rounded-md bg-emerald-100 text-emerald-700">
-                активен
-              </span>
+              <span className="text-xs px-3 py-1 rounded-md bg-emerald-100 text-emerald-700">активен</span>
             </div>
 
-            {/* Items */}
             <div className="px-6 py-4 space-y-4">
               {o.items.map((it, i) => {
                 const q = (it.qty ?? it.quantity ?? 1) as number;
                 const { base, inline } = splitNameAndInlineOptions(it.name || "");
                 const orderedChips = orderOptionsFlat(normOptions(it, inline));
-
                 return (
                   <div key={i} className="text-sm">
                     <div className="flex items-start justify-between">
                       <span className="font-medium">{base}</span>
                       <span className="text-slate-500">x{q}</span>
                     </div>
-
                     {orderedChips.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
                         {orderedChips.map((label) => (
-                          <span
-                            key={label}
-                            className="inline-flex items-center px-3 py-1 text-[12px] leading-5
-                                       rounded-full bg-slate-100 text-slate-700 border border-slate-200
-                                       whitespace-nowrap"
-                          >
+                          <span key={label} className="inline-flex items-center px-3 py-1 text-[12px] leading-5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
                             {label}
                           </span>
                         ))}
@@ -231,25 +170,19 @@ export default function OrdersActive() {
               })}
             </div>
 
-            {/* Total */}
             <div className="border-t px-6 py-3 flex items-center justify-between">
               <div className="text-slate-600 font-semibold">Итого:</div>
               <div className="font-semibold">{Number(o.total).toLocaleString("ru-RU")} ₸</div>
             </div>
 
-            {/* Finish */}
             <div className="px-6 pb-5">
-              <button
-                onClick={() => finish(o.id)}
-                className="w-full rounded-md py-2.5 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white inline-flex items-center justify-center gap-2"
-              >
+              <button onClick={() => finish(o.id)} className="w-full rounded-md py-2.5 font-semibold bg-emerald-700 hover:bg-emerald-800 text-white inline-flex items-center justify-center gap-2">
                 <CheckCircle2 size={18} />
                 Завершить заказ
               </button>
             </div>
           </div>
         ))}
-
         {!orders.length && <div className="text-slate-500">Нет активных заказов</div>}
       </div>
     </div>
