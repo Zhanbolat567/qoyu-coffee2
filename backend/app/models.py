@@ -54,7 +54,7 @@ class OptionItem(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("option_groups.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(120))
     price: Mapped[float] = mapped_column(Numeric(12,2), default=0)
-    image_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)  # <<<<<< добавили
+    image_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     group = relationship("OptionGroup", back_populates="items")
 
