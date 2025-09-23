@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from typing import List
 from ..database import get_db
 from .. import models
@@ -12,7 +12,6 @@ from . import dashboard as dashboard_router
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
-
 def _order_to_out(o: models.Order) -> OrderOut:
     items = []
     for it in o.items:
@@ -20,15 +19,13 @@ def _order_to_out(o: models.Order) -> OrderOut:
         name = it.name_snapshot + (f" ({opts})" if opts else "")
         items.append(OrderItemOut(name=name, quantity=it.qty))
     return OrderOut(
-        # Отдаём на фронт ежедневный гостевой номер
-        id=o.guest_seq,
+        id=o.guest_seq,  # отдаём дневной номер
         customer_name=o.customer_name,
         take_away=o.take_away,
         items=items,
         total=float(o.total),
         created_at=o.created_at,
     )
-
 
 async def _broadcast_refresh(db: Session):
     act = (
@@ -52,7 +49,6 @@ async def _broadcast_refresh(db: Session):
     await hub.send("orders", payload)
     await dashboard_router.push_dashboard(db)
 
-
 @router.post("", response_model=OrderOut, status_code=201)
 async def create_order(
     body: OrderCreateIn,
@@ -62,13 +58,13 @@ async def create_order(
     if not body.items:
         raise HTTPException(400, detail="Empty cart")
 
-    # Дата "сегодня" в UTC (для согласованности с created_at/guest_date)
-    today_utc = datetime.now(timezone.utc).date()
-
-    # Максимальный гостевой номер за сегодня; если нет заказов — 0 -> первый будет 1
+    # Макс. дневной номер считаем по локальному дню (Asia/Almaty)
     max_seq = (
         db.query(func.coalesce(func.max(models.Order.guest_seq), 0))
-        .filter(func.date(models.Order.guest_date) == today_utc)
+        .filter(
+            func.date(func.timezone("Asia/Almaty", models.Order.guest_date))
+            == func.date(func.timezone("Asia/Almaty", func.now()))
+        )
         .scalar()
     )
     guest_seq = int(max_seq) + 1
@@ -78,6 +74,7 @@ async def create_order(
         take_away=body.take_away,
         total=0,
         guest_seq=guest_seq,
+        # сохраняем UTC—ок, для сравнения выше всё равно приводим к Asia/Almaty
         guest_date=datetime.now(timezone.utc),
     )
     db.add(order)
@@ -89,27 +86,20 @@ async def create_order(
         if not prod:
             raise HTTPException(400, detail=f"Product {it.product_id} not found")
 
-        # Базовая цена (может прийти уже со скидкой)
         unit = (
             float(it.unit_price_base)
             if it.unit_price_base is not None
             else float(prod.base_price)
         )
 
-        # Снепшот названия (с суффиксом)
         name_snap = prod.name + (it.name_suffix or "")
 
         item = models.OrderItem(
-            order=order,
-            product=prod,
-            name_snapshot=name_snap,
-            unit_price=unit,
-            qty=it.qty,
+            order=order, product=prod, name_snapshot=name_snap, unit_price=unit, qty=it.qty
         )
         db.add(item)
         db.flush()
 
-        # Платные опции
         if it.option_item_ids:
             opts = (
                 db.query(models.OptionItem)
@@ -136,7 +126,6 @@ async def create_order(
     await _broadcast_refresh(db)
     return _order_to_out(order)
 
-
 @router.get("", response_model=List[OrderOut])
 async def list_orders(
     status: models.OrderStatus = models.OrderStatus.active,
@@ -152,11 +141,8 @@ async def list_orders(
     rows = q.limit(limit).all()
     return [_order_to_out(x) for x in rows]
 
-
 @router.patch("/{oid}/close", response_model=OrderOut)
-async def close_order(
-    oid: int, db: Session = Depends(get_db), _user=Depends(get_current_user)
-):
+async def close_order(oid: int, db: Session = Depends(get_db), _user=Depends(get_current_user)):
     o = db.query(models.Order).get(oid)
     if not o:
         raise HTTPException(404, detail="Not found")
@@ -169,18 +155,14 @@ async def close_order(
     await _broadcast_refresh(db)
     return _order_to_out(o)
 
-
 @router.delete("/closed")
 async def clear_closed(db: Session = Depends(get_db), _user=Depends(get_current_user)):
     db.query(models.OrderItemOption).delete(synchronize_session=False)
     db.query(models.OrderItem).delete(synchronize_session=False)
-    db.query(models.Order).filter(models.Order.status == models.OrderStatus.closed).delete(
-        synchronize_session=False
-    )
+    db.query(models.Order).filter(models.Order.status == models.OrderStatus.closed).delete(synchronize_session=False)
     db.commit()
     await _broadcast_refresh(db)
     return {"ok": True}
-
 
 @router.get("/feed", response_model=OrdersFeed)
 async def feed(recent: int = 10, db: Session = Depends(get_db)):
@@ -201,7 +183,6 @@ async def feed(recent: int = 10, db: Session = Depends(get_db)):
         active=[_order_to_out(x) for x in act],
         recent_closed=[_order_to_out(x) for x in cls],
     )
-
 
 @router.websocket("/ws")
 async def ws(ws: WebSocket):
