@@ -156,11 +156,28 @@ async def list_orders(
 async def close_order(
     oid: int, db: Session = Depends(get_db), _user=Depends(get_current_user)
 ):
+    # 1) пробуем как PK
     o = db.query(models.Order).get(oid)
+
+    if not o:
+        # 2) если не нашли — считаем, что прилетел guest_seq за «сегодня» (Asia/Almaty)
+        o = (
+            db.query(models.Order)
+            .filter(
+                models.Order.guest_seq == oid,
+                func.date(func.timezone(KZ_TZ, models.Order.guest_date))
+                == func.date(func.timezone(KZ_TZ, func.now())),
+            )
+            .order_by(models.Order.created_at.desc())
+            .first()
+        )
+
     if not o:
         raise HTTPException(404, detail="Not found")
+
     if o.status == models.OrderStatus.closed:
         return _order_to_out(o)
+
     o.status = models.OrderStatus.closed
     o.closed_at = datetime.now(timezone.utc)
     db.commit()
