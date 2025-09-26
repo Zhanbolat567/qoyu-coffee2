@@ -2,7 +2,7 @@
   email admin@qoyucoffee.kz
 }
 
-qoyucoffee.kz, www.qoyucoffee.kz {
+test.tvq.kz, test.tvq.kz {
   encode zstd gzip
 
   # /api/* — режем префикс, чтобы /api/docs -> /docs на backend
@@ -20,3 +20,4 @@ qoyucoffee.kz, www.qoyucoffee.kz {
     reverse_proxy qoyu-web:80
   }
 }
+
