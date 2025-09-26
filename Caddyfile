@@ -1,5 +1,5 @@
 {
-  email admin@qoyucoffee.kz
+  email admin@mail.kazinform.kz
 }
 
 test.tvq.kz, test.tvq.kz {
@@ -20,4 +20,5 @@ test.tvq.kz, test.tvq.kz {
     reverse_proxy qoyu-web:80
   }
 }
+
 
