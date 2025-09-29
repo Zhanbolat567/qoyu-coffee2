@@ -1,8 +1,8 @@
 {
-  email admin@mail.kazinform.kz
+  email admin@qoyucoffee.kz
 }
 
-test.tvq.kz, test.tvq.kz {
+qoyucoffee.kz, qoyucoffee.kz {
   encode zstd gzip
 
   # /api/* — режем префикс, чтобы /api/docs -> /docs на backend
@@ -20,5 +20,6 @@ test.tvq.kz, test.tvq.kz {
     reverse_proxy qoyu-web:80
   }
 }
+
 
 
